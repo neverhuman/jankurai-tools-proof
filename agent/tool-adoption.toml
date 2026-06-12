@@ -1,0 +1,69 @@
+schema_version = "1.0.0"
+
+# Jankurai-backed CI lanes that replace ad-hoc tooling for this repo. Each
+# applicable tool below is configured here and executed in CI by
+# ops/ci/tool-adoption.sh, which uploads the matching evidence artifact.
+
+[[tools]]
+id = "audit-ci"
+mode = "auto"
+
+[[tools]]
+id = "proof-routing"
+mode = "auto"
+
+[[tools]]
+id = "proofbind"
+mode = "auto"
+
+[[tools]]
+id = "proofmark-rust"
+mode = "auto"
+
+[[tools]]
+id = "security"
+mode = "auto"
+
+[[tools]]
+id = "contract-drift"
+mode = "auto"
+
+[[tools]]
+id = "rust-witness"
+mode = "advisory"
+
+[[tools]]
+id = "copy-code"
+mode = "advisory"
+
+[[tools]]
+id = "authz-matrix"
+mode = "auto"
+
+[[tools]]
+id = "input-boundary"
+mode = "auto"
+
+[[tools]]
+id = "agent-tool-supply"
+mode = "auto"
+
+[[tools]]
+id = "release-readiness"
+mode = "auto"
+
+[[tools]]
+id = "cost-budget"
+mode = "auto"
+
+[[tools]]
+id = "ci-bad-behavior"
+mode = "advisory"
+
+[[tools]]
+id = "git-bad-behavior"
+mode = "advisory"
+
+[[tools]]
+id = "release-bad-behavior"
+mode = "advisory"
