@@ -2,7 +2,9 @@
 # Aggregate quality gate run by the pre-push hook and the local runner.
 # Executes the same lanes CI runs so a green local gate means a green CI run.
 set -euo pipefail
-source "$(dirname "${BASH_SOURCE[0]}")/lib.sh"
+ci_dir="${BASH_SOURCE[0]%/*}"
+[[ "$ci_dir" != "${BASH_SOURCE[0]}" ]] || ci_dir=.
+source "$ci_dir/lib.sh"
 cd "$REPO_ROOT"
 
 log "quality gates: required -> fast -> security -> audit"

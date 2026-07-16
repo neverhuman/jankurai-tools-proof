@@ -2,7 +2,9 @@
 # Jankurai self-audit lane: writes the repo-score artifacts that CI uploads.
 # The same lane runs locally via `just audit`.
 set -euo pipefail
-source "$(dirname "${BASH_SOURCE[0]}")/lib.sh"
+ci_dir="${BASH_SOURCE[0]%/*}"
+[[ "$ci_dir" != "${BASH_SOURCE[0]}" ]] || ci_dir=.
+source "$ci_dir/lib.sh"
 cd "$REPO_ROOT"
 
 mkdir -p .jankurai

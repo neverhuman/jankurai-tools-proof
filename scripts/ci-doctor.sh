@@ -3,7 +3,9 @@
 # depend on, with the versions pinned in ops/ci/lib.sh. Run this before pushing
 # to verify your machine matches what GitHub Actions provides.
 set -euo pipefail
-source "$(dirname "${BASH_SOURCE[0]}")/../ops/ci/lib.sh"
+script_dir="${BASH_SOURCE[0]%/*}"
+[[ "$script_dir" != "${BASH_SOURCE[0]}" ]] || script_dir=.
+source "$script_dir/../ops/ci/lib.sh"
 
 log "ci-doctor: checking required tools"
 
@@ -17,7 +19,7 @@ for tool in cargo rustc cargo-nextest gitleaks cargo-audit; do
   fi
 done
 
-if require_governed_jankurai; then
+if build_governed_jankurai_launcher && require_governed_jankurai; then
   log "ok: $GOVERNED_JANKURAI_VERSION ($GOVERNED_JANKURAI_BIN; receipt sha256:$GOVERNED_JANKURAI_RECEIPT_SHA256)"
 else
   status=1
