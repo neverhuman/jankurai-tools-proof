@@ -1,5 +1,8 @@
 #!/usr/bin/env bash
 set -euo pipefail
-cd "$(dirname "${BASH_SOURCE[0]}")/../.."
+source "$(dirname "${BASH_SOURCE[0]}")/lib.sh"
+cd "$REPO_ROOT"
 
+require_jankurai
+log "required lane: workspace tests"
 cargo test --workspace --locked
