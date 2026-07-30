@@ -31,6 +31,11 @@ machine-readable route lives in [`agent/test-map.json`](../agent/test-map.json).
   `extensions.test_execution` receipt with the right kind, lane, and exact
   declared command. Non-Rust mapped surfaces likewise require the exact
   declared command; self-asserted `true` receipts remain missing.
+- **Agent-tool rule binding** tests require a unique reviewed proof-lane
+  declaration and an exact-command receipt whose closed `rules_covered` objects
+  all report `covered`. Missing declarations, legacy strings, duplicate IDs,
+  review statuses, wrong rules, unrelated paths, and unrelated commands fail
+  closed.
 - **Non-circular lane proof** is required. A script cannot use its own not-yet-
   completed receipt as evidence. Map the implementation path to a lower-level
   focused hostile/contract lane; the outer orchestrator may emit the higher-

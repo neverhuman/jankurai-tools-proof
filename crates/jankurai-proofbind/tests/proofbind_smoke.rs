@@ -545,3 +545,218 @@ fn boundary_obligation_requires_every_receipt_kind() {
         .unwrap();
     assert!(!authz.satisfied);
 }
+
+#[test]
+fn agent_tool_receipt_requires_authenticated_unique_rule_binding() {
+    let repo = seed_repo();
+    fs::write(
+        repo.path().join("agent/test-map.json"),
+        r#"{"workspace":"fixture","tests":{"agent/":{"command":"cargo test --test agent_contract","purpose":"agent tool contract"}}}"#,
+    )
+    .unwrap();
+    fs::write(
+        repo.path().join("agent/proof-lanes.toml"),
+        r#"[[lane]]
+name = "agent-contract"
+command = "cargo test --test agent_contract"
+purpose = "agent tool contract"
+rules_covered = ["HLT-024-AGENT-TOOL-SUPPLY-GAP"]
+"#,
+    )
+    .unwrap();
+    fs::write(
+        repo.path().join("agent/tool.md"),
+        "the agent tool contract is executable\n",
+    )
+    .unwrap();
+
+    let receipt_dir = repo.path().join("target/jankurai/receipts");
+    fs::create_dir_all(&receipt_dir).unwrap();
+    let receipt_path = receipt_dir.join("agent-contract.json");
+    let valid_receipt = serde_json::json!({
+        "lane": "agent-contract",
+        "command": "cargo test --test agent_contract",
+        "exit_code": 0,
+        "elapsed_ms": 1,
+        "artifacts": [],
+        "changed_paths": ["agent/tool.md"],
+        "rules_covered": [{
+            "rule_id": "HLT-024-AGENT-TOOL-SUPPLY-GAP",
+            "status": "covered"
+        }]
+    });
+    let verify = || {
+        build_proofbind(ProofBindRequest {
+            repo_root: repo.path().to_path_buf(),
+            changed_paths: vec![PathBuf::from("agent/tool.md")],
+            changed_from: None,
+            mode: ProofBindMode::Required,
+            proof_receipts: Some(PathBuf::from("target/jankurai/receipts")),
+        })
+        .unwrap()
+    };
+
+    fs::write(&receipt_path, valid_receipt.to_string()).unwrap();
+    let valid = verify();
+    assert_eq!(
+        valid.obligations.obligations[0].required_lanes,
+        ["agent-contract"]
+    );
+    assert_eq!(valid.obligations.summary.satisfied, 1);
+
+    let invalid_rule_claims = [
+        (
+            "missing",
+            serde_json::json!({
+                "lane": "agent-contract",
+                "command": "cargo test --test agent_contract",
+                "exit_code": 0,
+                "elapsed_ms": 1,
+                "artifacts": [],
+                "changed_paths": ["agent/tool.md"]
+            }),
+        ),
+        (
+            "legacy string",
+            serde_json::json!({
+                "lane": "agent-contract",
+                "command": "cargo test --test agent_contract",
+                "exit_code": 0,
+                "elapsed_ms": 1,
+                "artifacts": [],
+                "changed_paths": ["agent/tool.md"],
+                "rules_covered": ["HLT-024-AGENT-TOOL-SUPPLY-GAP"]
+            }),
+        ),
+        (
+            "duplicate",
+            serde_json::json!({
+                "lane": "agent-contract",
+                "command": "cargo test --test agent_contract",
+                "exit_code": 0,
+                "elapsed_ms": 1,
+                "artifacts": [],
+                "changed_paths": ["agent/tool.md"],
+                "rules_covered": [
+                    {
+                        "rule_id": "HLT-024-AGENT-TOOL-SUPPLY-GAP",
+                        "status": "covered"
+                    },
+                    {
+                        "rule_id": "HLT-024-AGENT-TOOL-SUPPLY-GAP",
+                        "status": "covered"
+                    }
+                ]
+            }),
+        ),
+        (
+            "wrong rule",
+            serde_json::json!({
+                "lane": "agent-contract",
+                "command": "cargo test --test agent_contract",
+                "exit_code": 0,
+                "elapsed_ms": 1,
+                "artifacts": [],
+                "changed_paths": ["agent/tool.md"],
+                "rules_covered": [{
+                    "rule_id": "HLT-023-INPUT-BOUNDARY-GAP",
+                    "status": "covered"
+                }]
+            }),
+        ),
+        (
+            "partially valid",
+            serde_json::json!({
+                "lane": "agent-contract",
+                "command": "cargo test --test agent_contract",
+                "exit_code": 0,
+                "elapsed_ms": 1,
+                "artifacts": [],
+                "changed_paths": ["agent/tool.md"],
+                "rules_covered": [
+                    {
+                        "rule_id": "HLT-024-AGENT-TOOL-SUPPLY-GAP",
+                        "status": "covered"
+                    },
+                    {
+                        "rule_id": "HLT-023-INPUT-BOUNDARY-GAP",
+                        "status": "review"
+                    }
+                ]
+            }),
+        ),
+        (
+            "unrelated path",
+            serde_json::json!({
+                "lane": "agent-contract",
+                "command": "cargo test --test agent_contract",
+                "exit_code": 0,
+                "elapsed_ms": 1,
+                "artifacts": [],
+                "changed_paths": ["README.md"],
+                "rules_covered": [{
+                    "rule_id": "HLT-024-AGENT-TOOL-SUPPLY-GAP",
+                    "status": "covered"
+                }]
+            }),
+        ),
+        (
+            "unrelated command",
+            serde_json::json!({
+                "lane": "agent-contract",
+                "command": "true",
+                "exit_code": 0,
+                "elapsed_ms": 1,
+                "artifacts": [],
+                "changed_paths": ["agent/tool.md"],
+                "rules_covered": [{
+                    "rule_id": "HLT-024-AGENT-TOOL-SUPPLY-GAP",
+                    "status": "covered"
+                }]
+            }),
+        ),
+    ];
+    for (case, receipt) in invalid_rule_claims {
+        fs::write(&receipt_path, receipt.to_string()).unwrap();
+        assert_eq!(
+            verify().obligations.summary.satisfied,
+            0,
+            "{case} rule claim must fail closed"
+        );
+    }
+
+    fs::write(&receipt_path, valid_receipt.to_string()).unwrap();
+    fs::write(
+        repo.path().join("agent/proof-lanes.toml"),
+        r#"[[lane]]
+name = "agent-contract"
+command = "cargo test --test agent_contract"
+purpose = "agent tool contract"
+"#,
+    )
+    .unwrap();
+    assert_eq!(
+        verify().obligations.summary.satisfied,
+        0,
+        "a receipt cannot self-assert a rule absent from the reviewed lane declaration"
+    );
+
+    fs::write(
+        repo.path().join("agent/proof-lanes.toml"),
+        r#"[[lane]]
+name = "agent-contract"
+command = "cargo test --test agent_contract"
+purpose = "agent tool contract"
+rules_covered = [
+  "HLT-024-AGENT-TOOL-SUPPLY-GAP",
+  "HLT-024-AGENT-TOOL-SUPPLY-GAP",
+]
+"#,
+    )
+    .unwrap();
+    assert_eq!(
+        verify().obligations.summary.satisfied,
+        0,
+        "duplicate reviewed rule declarations must fail closed"
+    );
+}

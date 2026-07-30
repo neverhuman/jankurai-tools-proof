@@ -27,6 +27,10 @@ library entrypoints; the pure routing and receipt logic is deterministic.
   Non-Rust fallback surfaces use that same declared-command binding rather than
   an impossible Rust Proofmark requirement. A lane may not satisfy an
   obligation by claiming an exact obligation ID or by reporting `command=true`.
+  Agent-tool surfaces route to their exact test-map/proof-lane command. The
+  reviewed lane declaration and the emitted receipt must both bind every
+  required rule; missing, duplicate, malformed, partial, wrong-path, or
+  self-asserted rule coverage remains unsatisfied.
 - **`jankurai-proofmark`** ingests obligations plus coverage, mutation, and
   negative-proof evidence and writes a proof receipt that marks each obligation
   as `pass`, `review`, or `missing`. The fixed Git change and candidate source

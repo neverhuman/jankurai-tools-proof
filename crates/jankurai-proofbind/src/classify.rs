@@ -154,6 +154,12 @@ pub(crate) fn classify_changed_path(
     }
 
     if is_agent_tool_surface(&lower_path, &lower_text) {
+        let (_, proof_lane) = catalog.test_for_path(path);
+        let required_lane = if proof_lane == "unmapped" {
+            "security"
+        } else {
+            proof_lane.as_str()
+        };
         surfaces.push(surface(
             catalog,
             path,
@@ -166,7 +172,7 @@ pub(crate) fn classify_changed_path(
             "high",
             vec!["agent_tool_supply", "tool_authority"],
             vec!["HLT-024-AGENT-TOOL-SUPPLY-GAP"],
-            vec!["security"],
+            vec![required_lane],
         ));
     }
 
@@ -290,6 +296,7 @@ pub(crate) fn obligation_for_surface(
         &obligation_id,
         surface,
         receipts,
+        catalog,
         catalog.test_command_for_path(&surface.path),
     ));
     let satisfied = !receipt_paths.is_empty();

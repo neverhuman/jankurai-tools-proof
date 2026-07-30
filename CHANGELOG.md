@@ -35,6 +35,10 @@ version string lives in [`VERSION`](VERSION).
   Test/example and non-Rust fallback receipts must match the exact declared
   test-map/proof-lane command; self-asserted `command=true` receipts cannot
   satisfy an obligation.
+- Agent-tool obligations now bind to the exact mapped proof lane and accept rule
+  coverage only when both the unique reviewed lane declaration and its
+  exact-command receipt name the required rule. Malformed, duplicate, partial,
+  wrong-path, or self-asserted rule claims remain missing.
 - A descriptor-held Rust launcher authenticates and seals the protected
   Jankurai 1.6.11 split.2 binary and its content-addressed installation receipt
   before execution, then replaces caller state with a fixed minimal tool and

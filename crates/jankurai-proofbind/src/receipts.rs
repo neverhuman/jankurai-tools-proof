@@ -14,6 +14,7 @@ pub(crate) struct ReceiptEvidence {
     pub path: String,
     pub changed_paths: Vec<String>,
     pub rules_covered: Vec<String>,
+    pub rules_covered_valid: bool,
     pub full_repository_scope: bool,
     pub proofmark_results: BTreeMap<String, String>,
     pub proofmark_negative_results: BTreeMap<String, String>,
@@ -59,6 +60,7 @@ fn receipt_matches_surface(
     obligation_id: &str,
     surface: &ChangedSurface,
     receipt: &ReceiptEvidence,
+    catalog: &crate::catalog::Catalog,
     declared_test_command: Option<&str>,
 ) -> bool {
     if receipt.exit_code != 0 {
@@ -86,12 +88,33 @@ fn receipt_matches_surface(
     if !path_matches {
         return false;
     }
+    if !receipt.rules_covered_valid {
+        return false;
+    }
     let rules_match = surface
         .required_rules
         .iter()
         .all(|rule| receipt.rules_covered.iter().any(|covered| covered == rule));
     if !rules_match {
         return false;
+    }
+    if surface
+        .risk_tags
+        .iter()
+        .any(|tag| tag == "agent_tool_supply")
+    {
+        let Some(declared_command) = declared_test_command else {
+            return false;
+        };
+        if declared_command != receipt.command.trim()
+            || !catalog.lane_authenticates_rules(
+                &receipt.lane,
+                declared_command,
+                &surface.required_rules,
+            )
+        {
+            return false;
+        }
     }
     if receipt.lane == "proofmark-rust" {
         return receipt
@@ -147,12 +170,19 @@ pub(crate) fn satisfying_receipt_paths(
     obligation_id: &str,
     surface: &ChangedSurface,
     receipts: &[ReceiptEvidence],
+    catalog: &crate::catalog::Catalog,
     declared_test_command: Option<&str>,
 ) -> Vec<String> {
     let matching = receipts
         .iter()
         .filter(|receipt| {
-            receipt_matches_surface(obligation_id, surface, receipt, declared_test_command)
+            receipt_matches_surface(
+                obligation_id,
+                surface,
+                receipt,
+                catalog,
+                declared_test_command,
+            )
         })
         .collect::<Vec<_>>();
     let lanes = matching
@@ -205,23 +235,7 @@ fn receipt_from_value(repo: &Path, entry: &Path, value: &Value) -> ReceiptEviden
     } else {
         Vec::new()
     };
-    let mut rules_covered = Vec::new();
-    if let Some(items) = value.get("rules_covered").and_then(Value::as_array) {
-        for item in items {
-            if let Some(rule) = item.as_str() {
-                rules_covered.push(rule.to_string());
-            } else if let Some(rule) = item.get("rule_id").and_then(Value::as_str) {
-                let status = item
-                    .get("status")
-                    .and_then(Value::as_str)
-                    .unwrap_or("covered");
-                if !matches!(status, "covered" | "pass" | "satisfied") {
-                    continue;
-                }
-                rules_covered.push(rule.to_string());
-            }
-        }
-    }
+    let (rules_covered, rules_covered_valid) = parse_rules_covered(value);
     let null_value = Value::Null;
     let proofmark =
         if let Some(proofmark) = value.get("extensions").and_then(|v| v.get("proofmark")) {
@@ -276,11 +290,37 @@ fn receipt_from_value(repo: &Path, entry: &Path, value: &Value) -> ReceiptEviden
         path: display_rel(repo, entry),
         changed_paths,
         rules_covered,
+        rules_covered_valid,
         full_repository_scope,
         proofmark_results,
         proofmark_negative_results,
         typed_test_execution,
     }
+}
+
+fn parse_rules_covered(value: &Value) -> (Vec<String>, bool) {
+    let Some(items) = value.get("rules_covered").and_then(Value::as_array) else {
+        return (Vec::new(), false);
+    };
+    if items.is_empty() {
+        return (Vec::new(), false);
+    }
+    let mut rules = BTreeSet::new();
+    for item in items {
+        let Some(object) = item.as_object() else {
+            return (Vec::new(), false);
+        };
+        if object.len() != 2 || object.get("status").and_then(Value::as_str) != Some("covered") {
+            return (Vec::new(), false);
+        }
+        let Some(rule) = object.get("rule_id").and_then(Value::as_str) else {
+            return (Vec::new(), false);
+        };
+        if rule.is_empty() || rule.trim() != rule || !rules.insert(rule.to_string()) {
+            return (Vec::new(), false);
+        }
+    }
+    (rules.into_iter().collect(), true)
 }
 
 fn display_rel(repo: &Path, path: &Path) -> String {
