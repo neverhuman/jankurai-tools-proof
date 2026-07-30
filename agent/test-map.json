@@ -57,6 +57,10 @@
       "command": "bash scripts/ci-local.sh contract-drift",
       "purpose": "verify pinned per-crate public API digests against regenerated Rust surfaces"
     },
+    "agent/supporting-evidence.json": {
+      "command": "bash scripts/ci-local.sh required",
+      "purpose": "classify repository-wide context and release evidence without losing changed-path attribution"
+    },
     "docs/": {
       "command": "bash scripts/ci-local.sh required",
       "purpose": "verify agent-readable documentation stays present"
@@ -68,6 +72,14 @@
     "ops/": {
       "command": "bash scripts/ci-local.sh required",
       "purpose": "verify pinned CI script entrypoints"
+    },
+    "ops/ci/changed-fast-audit.sh": {
+      "command": "bash scripts/ci-local.sh required",
+      "purpose": "score repository-wide rules on the full tree while retaining the exact Git change in the proof plan"
+    },
+    "ops/ci/changed-fast-evidence.sh": {
+      "command": "bash scripts/ci-local.sh required",
+      "purpose": "classify tracked, untracked, renamed, deleted, and unchanged supporting evidence"
     },
     "tools/": {
       "command": "bash scripts/ci-local.sh security",

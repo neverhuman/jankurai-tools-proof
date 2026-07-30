@@ -53,6 +53,16 @@ integration runs the same lanes under
 - [Release process](docs/release.md)
 - [Agent exceptions and overrides](docs/exceptions.md)
 
+## Agent handoff
+
+Agents must read [`AGENTS.md`](AGENTS.md) and [`SPLIT.md`](SPLIT.md) before
+changing source. The required lane validates the repository-wide context and
+release controls declared in
+[`agent/supporting-evidence.json`](agent/supporting-evidence.json). Changed
+audits keep the exact Git path attribution in their proof plan while evaluating
+repository-wide release rules against the full candidate tree; see
+[`ops/ci/changed-fast-audit.sh`](ops/ci/changed-fast-audit.sh).
+
 ## Versioning
 
 The current version is recorded in [`VERSION`](VERSION) and the change history in

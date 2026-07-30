@@ -53,6 +53,13 @@ uses the pinned nightly rustdoc required for rustdoc JSON with Cargo offline,
 regenerates all three crate surfaces, and compares exact SHA-256 digests with
 the reviewed `agent/public-api-baseline.json`.
 
+Changed-fast release evidence is split deliberately: the proof plan retains the
+exact Git change, while repository-wide readiness is evaluated on the full
+candidate tree. `ops/ci/changed-fast-evidence-test.sh` covers modified,
+untracked, renamed, deleted, and unchanged support documents plus a traversal
+hostile. `ops/ci/changed-fast-audit.sh` then rejects missing support, score below
+85, any cap, or any hard finding.
+
 ## Repair receipts and telemetry
 
 When a proof lane fails, keep the next agent on the shortest possible rerun path.

@@ -42,6 +42,22 @@ The public mirror is a later distribution surface, not release authority or
 proof. Release builds depend on the protected Jeryu commit and immutable tag,
 never on a branch or an unreviewed mirror.
 
+## Changed release evidence
+
+Changed-path attribution and repository-wide readiness are separate evidence
+questions. `ops/ci/changed-fast-audit.sh <base>` preserves the exact Git change
+in its proof plan, classifies tracked, untracked, renamed, deleted, and
+unchanged context/release controls from
+`agent/supporting-evidence.json`, and evaluates repository-wide release rules
+against the full exact candidate tree. Missing, renamed, deleted, or untracked
+required support evidence fails closed; an unchanged support document remains
+visible without being mislabeled as changed.
+
+The resulting receipt binds the supporting-evidence classification, proof plan,
+and full-tree score by SHA-256. It requires score at least 85, zero caps, and
+zero hard findings. It does not lower a threshold, suppress a finding, or turn
+prose into runtime qualification.
+
 ## Integrity, provenance, and SBOM
 
 - **Dependency integrity**: builds are reproducible because `Cargo.lock` is

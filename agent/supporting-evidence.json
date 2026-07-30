@@ -1,0 +1,29 @@
+{
+  "schema": "jankurai.changed-fast-supporting-evidence/v1",
+  "evidence": [
+    {
+      "path": "AGENTS.md",
+      "class": "context"
+    },
+    {
+      "path": "README.md",
+      "class": "context"
+    },
+    {
+      "path": "SPLIT.md",
+      "class": "release"
+    },
+    {
+      "path": "VERSION",
+      "class": "release"
+    },
+    {
+      "path": "CHANGELOG.md",
+      "class": "release"
+    },
+    {
+      "path": "docs/release.md",
+      "class": "release"
+    }
+  ]
+}

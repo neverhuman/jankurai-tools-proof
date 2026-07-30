@@ -31,14 +31,8 @@ if [[ "$actual_predecessor_tree" != "$protected_predecessor_tree" ]]; then
 fi
 
 log "tool-adoption: fixed-predecessor diff ratchet"
-run_governed_jankurai diff-audit . \
-  --base-ref "$protected_predecessor" \
-  --out-dir target/jankurai/diff \
-  --json target/jankurai/diff/repo-score.json \
-  --md target/jankurai/diff/repo-score.md \
-  --proof-out target/jankurai/diff/proof-plan.json \
-  --proof-md target/jankurai/diff/proof-plan.md \
-  --changed-list target/jankurai/diff/changed-paths.txt
+/usr/bin/bash ops/ci/changed-fast-audit.sh \
+  "$protected_predecessor" target/jankurai/diff
 /usr/bin/jq -e \
   --arg base "$protected_predecessor" \
   '.base_ref == $base and (.changed_paths | length > 0)' \
