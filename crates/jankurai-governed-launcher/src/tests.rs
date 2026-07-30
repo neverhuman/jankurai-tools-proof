@@ -235,6 +235,36 @@ fn ambient_path_and_shell_function_markers_are_not_consulted() {
 }
 
 #[test]
+fn sealed_environment_excludes_caller_tool_and_git_configuration() {
+    let environment = execution::sealed_environment().unwrap();
+    let environment = environment
+        .iter()
+        .map(|entry| entry.to_string_lossy().into_owned())
+        .collect::<Vec<_>>();
+
+    assert_eq!(
+        environment,
+        vec![
+            "CARGO_HOME=/home/ubuntu/.cargo",
+            "CARGO_NET_OFFLINE=true",
+            "GIT_CONFIG_GLOBAL=/dev/null",
+            "GIT_CONFIG_NOSYSTEM=1",
+            "GIT_OPTIONAL_LOCKS=0",
+            "GIT_PAGER=cat",
+            "GIT_TERMINAL_PROMPT=0",
+            "HOME=/nonexistent",
+            "JANKURAI_NO_UPDATE_CHECK=1",
+            "LANG=C.UTF-8",
+            "LC_ALL=C.UTF-8",
+            "PAGER=cat",
+            "PATH=/usr/bin:/bin:/home/ubuntu/.local/bin",
+            "RUSTUP_HOME=/home/ubuntu/.rustup",
+            "TZ=UTC",
+        ]
+    );
+}
+
+#[test]
 fn production_policy_verifies_current_governed_installation() {
     verify_with_hook(&Policy::production(), || {}).unwrap();
 }

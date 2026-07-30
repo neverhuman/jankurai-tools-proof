@@ -27,12 +27,13 @@ library entrypoints; the pure routing and receipt logic is deterministic.
   obligation by claiming an exact obligation ID or by reporting `command=true`.
 - **`jankurai-proofmark`** ingests obligations plus coverage, mutation, and
   negative-proof evidence and writes a proof receipt that marks each obligation
-  as `pass`, `review`, or `missing`. LCOV `DA` entries define the executable
-  universe, including zero-hit lines. Git-added declarations outside that
-  universe are not invented as uncovered statements, while a changed production
-  file missing from the coverage inventory remains fail-closed. Legacy JSON
-  that reports hits without `coverable_lines` has no trusted executable
-  universe and remains `review`/`block`.
+  as `pass`, `review`, or `missing`. The fixed Git change and candidate source
+  define potentially executable changed lines; LCOV `DA` entries then prove
+  which of those lines are coverable and hit. An executable changed line absent
+  from LCOV is uncovered, so partial or empty intersections cannot pass.
+  Declarations and structural-only Rust lines remain outside the executable
+  denominator. Legacy JSON that reports hits without `coverable_lines` has no
+  trusted executable universe and remains `review`/`block`.
 
 ## Local workspace ownership
 

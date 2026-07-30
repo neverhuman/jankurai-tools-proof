@@ -178,14 +178,11 @@ pub(crate) fn changed_unit(
             coverage_status: "review".into(),
         };
     }
-    let changed_lines = changed_lines
-        .intersection(&file_coverage.coverable)
-        .copied()
-        .collect::<Vec<_>>();
+    let changed_lines = changed_lines.into_iter().collect::<Vec<_>>();
     let mut covered_changed_lines = Vec::new();
     let mut uncovered_changed_lines = Vec::new();
     for line in &changed_lines {
-        if file_coverage.covered.contains(line) {
+        if file_coverage.coverable.contains(line) && file_coverage.covered.contains(line) {
             covered_changed_lines.push(*line);
         } else {
             uncovered_changed_lines.push(*line);

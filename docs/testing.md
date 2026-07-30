@@ -22,7 +22,8 @@ machine-readable route lives in [`agent/test-map.json`](../agent/test-map.json).
   `crates/jankurai-proofmark/tests/` that prove obligations move from `review`
   to `pass` only when the matching coverage, mutation, and negative-behavior
   proof receipts are present. Its hostiles retain zero-hit LCOV lines, reject
-  legacy hit-only JSON as an executable-universe claim, reject absent production
+  legacy hit-only JSON as an executable-universe claim, reject omitted added
+  executable lines and empty LCOV intersections, reject absent production
   coverage, and keep test/example source out of the production LCOV denominator.
 - **Receipt completeness** tests prove that every required lane and receipt kind
   must be present. Test and example sources accept only a successful typed
@@ -33,6 +34,10 @@ machine-readable route lives in [`agent/test-map.json`](../agent/test-map.json).
   completed receipt as evidence. Map the implementation path to a lower-level
   focused hostile/contract lane; the outer orchestrator may emit the higher-
   level lane receipt only after that command actually returns successfully.
+- **Tool adoption** ratchets the candidate against the fixed protected
+  predecessor and runs Proofbind and Proofmark in required mode over the same
+  real compiler-covered Git fixture. Zero obligations, unavailable coverage,
+  review verdicts, or any missing required receipt make the lane fail.
 
 Run everything with `cargo nextest run --workspace` (lane `fast`/`test`).
 

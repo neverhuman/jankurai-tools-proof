@@ -47,19 +47,7 @@ pub(super) fn exec_sealed(
     let mut argv_pointers = argv.iter().map(|value| value.as_ptr()).collect::<Vec<_>>();
     argv_pointers.push(std::ptr::null());
 
-    let mut environment = std::env::vars_os()
-        .filter(|(name, _)| name != "JANKURAI_BIN" && name != "JANKURAI_NO_UPDATE_CHECK")
-        .map(|(name, value)| {
-            let mut pair = name;
-            pair.push("=");
-            pair.push(value);
-            os_to_cstring(&pair)
-        })
-        .collect::<Result<Vec<_>>>()?;
-    environment.push(
-        CString::new("JANKURAI_NO_UPDATE_CHECK=1")
-            .map_err(|_| BoundaryError("governed environment is invalid"))?,
-    );
+    let environment = sealed_environment()?;
     let mut environment_pointers = environment
         .iter()
         .map(|value| value.as_ptr())
@@ -77,6 +65,29 @@ pub(super) fn exec_sealed(
     };
     debug_assert_eq!(result, -1);
     Err(BoundaryError("verified executable launch failed"))
+}
+
+pub(super) fn sealed_environment() -> Result<Vec<CString>> {
+    [
+        "CARGO_HOME=/home/ubuntu/.cargo",
+        "CARGO_NET_OFFLINE=true",
+        "GIT_CONFIG_GLOBAL=/dev/null",
+        "GIT_CONFIG_NOSYSTEM=1",
+        "GIT_OPTIONAL_LOCKS=0",
+        "GIT_PAGER=cat",
+        "GIT_TERMINAL_PROMPT=0",
+        "HOME=/nonexistent",
+        "JANKURAI_NO_UPDATE_CHECK=1",
+        "LANG=C.UTF-8",
+        "LC_ALL=C.UTF-8",
+        "PAGER=cat",
+        "PATH=/usr/bin:/bin:/home/ubuntu/.local/bin",
+        "RUSTUP_HOME=/home/ubuntu/.rustup",
+        "TZ=UTC",
+    ]
+    .into_iter()
+    .map(|entry| CString::new(entry).map_err(|_| BoundaryError("governed environment is invalid")))
+    .collect()
 }
 
 fn os_to_cstring(value: &OsStr) -> Result<CString> {

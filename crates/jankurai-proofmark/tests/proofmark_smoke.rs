@@ -259,6 +259,59 @@ fn changed_declarations_are_not_invented_as_executable_coverage_lines() {
 }
 
 #[test]
+fn omitted_added_executable_lcov_line_blocks_required_proof() {
+    let repo = tempdir().unwrap();
+    fs::create_dir_all(repo.path().join("src")).unwrap();
+    git(repo.path(), &["init", "-q"]);
+    git(repo.path(), &["config", "user.name", "ProofMark Test"]);
+    git(
+        repo.path(),
+        &["config", "user.email", "proofmark@example.invalid"],
+    );
+    fs::write(
+        repo.path().join("src/lib.rs"),
+        "pub fn existing() -> bool { true }\n",
+    )
+    .unwrap();
+    git(repo.path(), &["add", "src/lib.rs"]);
+    git(repo.path(), &["commit", "-q", "-m", "base"]);
+    fs::write(
+        repo.path().join("src/lib.rs"),
+        concat!(
+            "pub fn existing() -> bool { true }\n\n",
+            "pub fn added() -> bool {\n",
+            "    let covered = true;\n",
+            "    covered\n",
+            "}\n",
+        ),
+    )
+    .unwrap();
+    git(repo.path(), &["add", "src/lib.rs"]);
+    git(repo.path(), &["commit", "-q", "-m", "change"]);
+    write_obligation(repo.path(), "src/lib.rs", &["proofmark-rust"]);
+    fs::write(
+        repo.path().join("partial.lcov"),
+        "TN:\nSF:src/lib.rs\nDA:4,1\nend_of_record\n",
+    )
+    .unwrap();
+
+    let output = build_proofmark(ProofMarkRequest {
+        repo_root: repo.path().to_path_buf(),
+        changed_paths: vec![],
+        changed_from: Some("HEAD^".into()),
+        obligations_path: Some(PathBuf::from("target/jankurai/proofbind/obligations.json")),
+        coverage_path: Some(PathBuf::from("partial.lcov")),
+        mutation_path: None,
+        negative_proofs: vec![],
+        mode: ProofMarkMode::Required,
+    })
+    .unwrap();
+
+    assert_eq!(output.receipt.changed_units[0].coverage_status, "review");
+    assert_eq!(output.receipt.summary.verdict, "block");
+}
+
+#[test]
 fn zero_hit_lcov_lines_remain_coverable_and_uncovered() {
     let repo = tempdir().unwrap();
     seed_two_commit_rust_change(repo.path());

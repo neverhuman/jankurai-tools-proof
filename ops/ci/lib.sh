@@ -57,11 +57,21 @@ build_governed_jankurai_launcher() {
     printf '[ci] governed Rust toolchain is unavailable\n' >&2
     return 1
   fi
-  PATH=/usr/bin:/bin \
-    RUSTC="$GOVERNED_RUSTC" \
+  /usr/bin/env -i \
+    CARGO_HOME=/home/ubuntu/.cargo \
     CARGO_NET_OFFLINE=true \
+    CARGO_TARGET_DIR="$REPO_ROOT/target" \
+    GIT_CONFIG_GLOBAL=/dev/null \
+    GIT_CONFIG_NOSYSTEM=1 \
+    HOME=/nonexistent \
+    LANG=C.UTF-8 \
+    LC_ALL=C.UTF-8 \
+    PATH=/usr/bin:/bin \
+    RUSTC="$GOVERNED_RUSTC" \
+    RUSTUP_HOME=/home/ubuntu/.rustup \
+    TZ=UTC \
     "$GOVERNED_CARGO" build --locked --offline \
-      -p jankurai-governed-launcher --bin jankurai-governed-launcher
+    -p jankurai-governed-launcher --bin jankurai-governed-launcher
 }
 
 require_governed_jankurai() {

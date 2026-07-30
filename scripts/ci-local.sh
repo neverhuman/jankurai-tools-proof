@@ -6,6 +6,7 @@ cd "$script_dir/.."
 
 lane="${1:-required}"
 case "$lane" in
-  required) bash ops/ci/required.sh ;;
-  *) echo "usage: $0 {required}" >&2; exit 2 ;;
+  required) /usr/bin/bash ops/ci/required.sh ;;
+  security) /usr/bin/bash ops/ci/security.sh ;;
+  *) echo "usage: $0 {required|security}" >&2; exit 2 ;;
 esac

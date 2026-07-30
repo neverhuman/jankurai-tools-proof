@@ -64,7 +64,9 @@ pub(crate) fn changed_lines_for_paths(
             continue;
         }
         let lines = match changed_lines_from_git(repo, changed_from, path) {
-            Ok(lines) if !lines.is_empty() => lines,
+            Ok(lines) if !lines.is_empty() => {
+                retain_potentially_executable_rust_lines(repo, path, lines)
+            }
             Ok(_) | Err(_) => BTreeSet::from([1]),
         };
         out.insert(path.clone(), lines);
@@ -181,6 +183,58 @@ fn parse_unified_diff_changed_lines(diff: &str) -> BTreeSet<u32> {
         }
     }
     out
+}
+
+fn retain_potentially_executable_rust_lines(
+    repo: &Path,
+    path: &str,
+    lines: BTreeSet<u32>,
+) -> BTreeSet<u32> {
+    let Ok(source) = fs::read_to_string(repo.join(path)) else {
+        return lines;
+    };
+    let source_lines = source.lines().collect::<Vec<_>>();
+    lines
+        .into_iter()
+        .filter(|line| {
+            line.checked_sub(1)
+                .and_then(|index| source_lines.get(index as usize))
+                .is_none_or(|source| is_potentially_executable_rust_line(source))
+        })
+        .collect()
+}
+
+fn is_potentially_executable_rust_line(source: &str) -> bool {
+    let source = source.trim();
+    if source.is_empty()
+        || source.starts_with("//")
+        || source.starts_with("/*")
+        || source.starts_with('*')
+        || source.starts_with("#[")
+        || matches!(source, "{" | "}" | "};" | "],")
+    {
+        return false;
+    }
+    let declaration = [
+        "use ",
+        "pub use ",
+        "mod ",
+        "pub mod ",
+        "struct ",
+        "pub struct ",
+        "enum ",
+        "pub enum ",
+        "trait ",
+        "pub trait ",
+        "impl ",
+        "type ",
+        "pub type ",
+        "fn ",
+        "pub fn ",
+        "pub(crate) fn ",
+        "pub(super) fn ",
+    ];
+    !source.ends_with('{') || !declaration.iter().any(|prefix| source.starts_with(prefix))
 }
 
 fn parse_hunk_new_start(line: &str) -> Option<u32> {

@@ -26,18 +26,22 @@ version string lives in [`VERSION`](VERSION).
 - Re-scoped `agent/owner-map.json`, `agent/test-map.json`, and
   `agent/generated-zones.toml` to the paths that exist in this single-purpose
   repo, and added `agent/audit-policy.toml` excluding transient build paths.
-- Proofmark now uses LCOV `DA` lines as the executable universe, retains
-  zero-hit lines, fails closed when production coverage is absent, and rejects
-  legacy hit-only JSON as a complete executable universe.
+- Proofmark now derives the changed executable-line universe from the fixed Git
+  change and candidate source, retains zero-hit LCOV lines, and treats every
+  executable changed line omitted from LCOV as uncovered. Production coverage
+  absence, empty intersections, and legacy hit-only JSON all block required
+  proof.
 - Proofbind now requires every declared lane and receipt kind conjunctively.
   Test/example and non-Rust fallback receipts must match the exact declared
   test-map/proof-lane command; self-asserted `command=true` receipts cannot
   satisfy an obligation.
 - A descriptor-held Rust launcher authenticates and seals the protected
   Jankurai 1.6.11 split.2 binary and its content-addressed installation receipt
-  before execution.
-- Clean audit and tool-adoption lanes now use the governed launcher and create
-  the ratchet baseline through an explicit governed predecessor step.
+  before execution, then replaces caller state with a fixed minimal tool and
+  Git configuration environment.
+- Tool adoption now ratchets the candidate against the exact protected
+  predecessor, executes a compiler-covered Rust contract fixture, and requires
+  non-vacuous, fully satisfied Proofbind and Proofmark output.
 
 ## [1.7.0] - 2026-06-12
 
