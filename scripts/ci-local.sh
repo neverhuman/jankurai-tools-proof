@@ -8,5 +8,6 @@ lane="${1:-required}"
 case "$lane" in
   required) /usr/bin/bash ops/ci/required.sh ;;
   security) /usr/bin/bash ops/ci/security.sh ;;
-  *) echo "usage: $0 {required|security}" >&2; exit 2 ;;
+  contract-drift) /usr/bin/bash ops/ci/contract-drift.sh ;;
+  *) echo "usage: $0 {required|security|contract-drift}" >&2; exit 2 ;;
 esac

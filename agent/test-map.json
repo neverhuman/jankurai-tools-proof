@@ -53,6 +53,10 @@
       "command": "bash scripts/ci-local.sh required",
       "purpose": "verify split control maps and standard metadata"
     },
+    "agent/public-api-baseline.json": {
+      "command": "bash scripts/ci-local.sh contract-drift",
+      "purpose": "verify pinned per-crate public API digests against regenerated Rust surfaces"
+    },
     "docs/": {
       "command": "bash scripts/ci-local.sh required",
       "purpose": "verify agent-readable documentation stays present"

@@ -4,7 +4,7 @@
 
 [[zone]]
 path = "target/"
-source = "crates/jankurai-proofbind + crates/jankurai-proofmark (Cargo workspace)"
+source = "crates/jankurai-proofbind + crates/jankurai-proofmark + crates/jankurai-governed-launcher (Cargo workspace)"
 command = "cargo build --workspace --locked"
 read_only = true
 write_policy = "generated_output"

@@ -8,6 +8,7 @@ machine-readable route lives in [`agent/test-map.json`](../agent/test-map.json).
 | `fast` | deterministic local proof for most edits (`cargo check` + `cargo nextest run`) |
 | `test` | the full workspace test suite for both crates |
 | `security` | secret scanning (`gitleaks`) plus dependency review (`cargo audit`) |
+| `contract-drift` | regenerate pinned Rust public APIs and compare exact baseline digests |
 | `audit` | jankurai repo score and hard-rule findings, written to `.jankurai/repo-score.{json,md}` |
 | `check` | release/merge gate: format, lint, fast, security, and self-audit |
 
@@ -40,6 +41,12 @@ machine-readable route lives in [`agent/test-map.json`](../agent/test-map.json).
   review verdicts, or any missing required receipt make the lane fail.
 
 Run everything with `cargo nextest run --workspace` (lane `fast`/`test`).
+
+Public Rust API drift is executable evidence, not a prose declaration.
+`bash scripts/ci-local.sh contract-drift` requires `cargo-public-api 0.52.0`,
+uses the pinned nightly rustdoc required for rustdoc JSON with Cargo offline,
+regenerates all three crate surfaces, and compares exact SHA-256 digests with
+the reviewed `agent/public-api-baseline.json`.
 
 ## Repair receipts and telemetry
 

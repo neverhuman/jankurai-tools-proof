@@ -42,6 +42,9 @@ version string lives in [`VERSION`](VERSION).
 - Tool adoption now ratchets the candidate against the exact protected
   predecessor, executes a compiler-covered Rust contract fixture, and requires
   non-vacuous, fully satisfied Proofbind and Proofmark output.
+- Release guidance now binds the private Jeryu protected lifecycle, immutable
+  tags, exact proof/SBOM provenance, and additive rollback. A pinned offline
+  `cargo-public-api` lane rejects drift from reviewed per-crate API digests.
 
 ## [1.7.0] - 2026-06-12
 

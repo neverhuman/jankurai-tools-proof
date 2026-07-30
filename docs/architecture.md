@@ -6,6 +6,8 @@ tooling crates extracted from the main auditor:
 ```text
 crates/jankurai-proofbind   semantic surface routing + proof obligation binding
 crates/jankurai-proofmark   changed-behavior proof receipt engine
+crates/jankurai-governed-launcher
+                             installed-auditor identity and execution boundary
 schemas/                    JSON Schemas for the proof artifacts both crates emit
 ```
 
@@ -34,12 +36,18 @@ library entrypoints; the pure routing and receipt logic is deterministic.
   Declarations and structural-only Rust lines remain outside the executable
   denominator. Legacy JSON that reports hits without `coverable_lines` has no
   trusted executable universe and remains `review`/`block`.
+- **`jankurai-governed-launcher`** opens the installed auditor and installation
+  receipt through descriptor-held, no-follow filesystem custody, validates
+  owner, mode, link count, bounded size, exact SHA-256, and receipt fields,
+  seals an exact memfd copy, and executes it with a fixed minimal environment.
+  Caller-selected `PATH`, Cargo, Git, home, wrapper, and diff configuration
+  cannot replace the governed executable or its build/runtime authority.
 
 ## Local workspace ownership
 
 | Path | Role |
 | --- | --- |
-| `crates/` | proofbind + proofmark Rust crates (library + tests) |
+| `crates/` | proofbind, proofmark, and governed-launcher Rust crates |
 | `schemas/` | JSON Schemas for proof plans, witnesses, obligations, and receipts |
 | `agent/` | machine-readable owner, test, boundary, and proof maps |
 | `docs/` | architecture, testing, boundaries, release, and exception docs |

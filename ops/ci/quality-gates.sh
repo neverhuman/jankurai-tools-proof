@@ -7,8 +7,9 @@ ci_dir="${BASH_SOURCE[0]%/*}"
 source "$ci_dir/lib.sh"
 cd "$REPO_ROOT"
 
-log "quality gates: required -> fast -> security -> audit"
+log "quality gates: required -> fast -> contract-drift -> security -> audit"
 bash ops/ci/required.sh
 bash ops/ci/fast.sh
+bash ops/ci/contract-drift.sh
 bash ops/ci/security.sh
 bash ops/ci/audit.sh

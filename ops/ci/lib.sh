@@ -21,6 +21,8 @@ export RUST_TOOLCHAIN="${RUST_TOOLCHAIN:-stable}"
 export GITLEAKS_VERSION="${GITLEAKS_VERSION:-8.18.4}"
 export CARGO_AUDIT_VERSION="${CARGO_AUDIT_VERSION:-0.21.0}"
 export NEXTEST_VERSION="${NEXTEST_VERSION:-0.9}"
+readonly CARGO_PUBLIC_API_BIN="/home/ubuntu/.cargo/bin/cargo-public-api"
+readonly CARGO_PUBLIC_API_VERSION="cargo-public-api 0.52.0"
 
 # Governed Jankurai identity. Callers must never select an ambient PATH,
 # Cargo, fusion, or fallback copy.
