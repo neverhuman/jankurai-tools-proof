@@ -9,9 +9,9 @@ use std::os::unix::fs::{MetadataExt, OpenOptionsExt, PermissionsExt};
 use std::path::{Path, PathBuf};
 
 const BINARY_PATH: &str = "/home/ubuntu/.jeryu/bin/jankurai";
-const BINARY_SHA256: &str = "fdb42e5fa7d9851c0729e59bf1e582c895aa9cfc03a7175b420c6025d2fd014e";
-const RECEIPT_PATH: &str = "/home/ubuntu/.jeryu/receipts/jankurai/sha256/494ea02af28e6aa7fb2f817831dc8f00df102398677779f7decfce55b3b20b98.json";
-const RECEIPT_SHA256: &str = "494ea02af28e6aa7fb2f817831dc8f00df102398677779f7decfce55b3b20b98";
+const BINARY_SHA256: &str = "96d99e6e7d8dc9cf23df1081edd1f975231456592f81d9405385219a2c7298aa";
+const RECEIPT_PATH: &str = "/home/ubuntu/.jeryu/receipts/jankurai/sha256/4b66c7b3d2ce4102b2302a7e73533cdbc2ae48ac02ec76cb6b1ff395ddc91d6a.json";
+const RECEIPT_SHA256: &str = "4b66c7b3d2ce4102b2302a7e73533cdbc2ae48ac02ec76cb6b1ff395ddc91d6a";
 const TRUSTED_ROOT: &str = "/home/ubuntu/.jeryu";
 const MAX_BINARY_BYTES: u64 = 64 * 1024 * 1024;
 const MAX_RECEIPT_BYTES: u64 = 64 * 1024;
@@ -392,18 +392,18 @@ fn validate_receipt(bytes: &[u8], policy: &Policy) -> Result<()> {
     expect_string(
         &value,
         "/source/commit",
-        "dface7397fe24d46b0b1885ddd5782c34edbff49",
+        "4dfbdfa3585f1928d5f996d7b5e14608dff14a03",
     )?;
-    expect_string(&value, "/source/tag", "v1.6.11-deadlang-precision-split.1")?;
+    expect_string(&value, "/source/tag", "v1.6.11-deadlang-precision-split.2")?;
     expect_string(
         &value,
         "/source/tree",
-        "34a8a1fb59bc4ebfadf12c45d95f169d06acc781",
+        "7e5d501aa6f0ee6ced9a48c6288a9943d0b9573c",
     )?;
     expect_string(
         &value,
         "/source/archive_sha256",
-        "2fbca5d04083e3c8d32f383d5b6b4520b8911690b26968c6fbcb210e1202b938",
+        "1aa3d178dec0fbb8d0657dd465ea6fda830ffc4ec1f65560b7b7d1682fd87e69",
     )?;
     expect_string(
         &value,
@@ -467,17 +467,17 @@ fn validate_receipt(bytes: &[u8], policy: &Policy) -> Result<()> {
     expect_string(
         &value,
         "/governance/manifest_commit",
-        "de80b657e1be5580289dfecdc0cd3c71348261e0",
+        "aac9336ac369f4d3046a1e0acc9d98c48ce164d1",
     )?;
     expect_string(
         &value,
         "/governance/manifest_tree",
-        "8dd6f773dce3ec2e5a82c8f0b606c240760489f9",
+        "7049feda28cfd95c8657f562b92e8246ceb1cc26",
     )?;
     expect_string(
         &value,
         "/governance/manifest_sha256",
-        "707f57b7f60b65025303315b050cc1c138c7fb2e2080e775ef97a971f286e9b5",
+        "7aaac7f1b8c1543eba5215ec7cd2bf35e0c2411339ed9af1d1a6ace68d2807d8",
     )?;
     expect_bool(&value, "/governance/protected_main", true)?;
     expect_string(&value, "/governance/protection_policy", "immutable-main-v1")?;
@@ -603,10 +603,10 @@ mod tests {
             "schema": "jeryu.jankurai-installation/v1",
             "source": {
                 "remote": "http://127.0.0.1:8787/git/jeryu/jankurai.git",
-                "commit": "dface7397fe24d46b0b1885ddd5782c34edbff49",
-                "tag": "v1.6.11-deadlang-precision-split.1",
-                "tree": "34a8a1fb59bc4ebfadf12c45d95f169d06acc781",
-                "archive_sha256": "2fbca5d04083e3c8d32f383d5b6b4520b8911690b26968c6fbcb210e1202b938",
+                "commit": "4dfbdfa3585f1928d5f996d7b5e14608dff14a03",
+                "tag": "v1.6.11-deadlang-precision-split.2",
+                "tree": "7e5d501aa6f0ee6ced9a48c6288a9943d0b9573c",
+                "archive_sha256": "1aa3d178dec0fbb8d0657dd465ea6fda830ffc4ec1f65560b7b7d1682fd87e69",
                 "cargo_lock_sha256": "b9acb981c326226a687d0b6703e4f7ee303148e9e1a6dda1aa03d77988820f6a",
                 "verification": "release-authoritative"
             },
@@ -630,9 +630,9 @@ mod tests {
             "governance": {
                 "status": "governed",
                 "manifest_repo": "http://127.0.0.1:8787/git/jeryu/jeryu-tool.git",
-                "manifest_commit": "de80b657e1be5580289dfecdc0cd3c71348261e0",
-                "manifest_tree": "8dd6f773dce3ec2e5a82c8f0b606c240760489f9",
-                "manifest_sha256": "707f57b7f60b65025303315b050cc1c138c7fb2e2080e775ef97a971f286e9b5",
+                "manifest_commit": "aac9336ac369f4d3046a1e0acc9d98c48ce164d1",
+                "manifest_tree": "7049feda28cfd95c8657f562b92e8246ceb1cc26",
+                "manifest_sha256": "7aaac7f1b8c1543eba5215ec7cd2bf35e0c2411339ed9af1d1a6ace68d2807d8",
                 "protected_main": true,
                 "protection_policy": "immutable-main-v1"
             },

@@ -21,7 +21,14 @@ machine-readable route lives in [`agent/test-map.json`](../agent/test-map.json).
 - **`jankurai-proofmark`** carries integration tests under
   `crates/jankurai-proofmark/tests/` that prove obligations move from `review`
   to `pass` only when the matching coverage, mutation, and negative-behavior
-  proof receipts are present.
+  proof receipts are present. Its hostile fixtures retain zero-hit LCOV lines,
+  filter non-executable declarations, reject absent production coverage, and
+  keep integration-test source out of the production LCOV denominator.
+- **Receipt completeness** tests prove that every required lane and receipt kind
+  must be present. Test and example sources accept only a successful typed
+  `extensions.test_execution` receipt with `kind=test|example` on their declared
+  test lane; an exact obligation ID in a Proofmark receipt cannot bypass
+  another required lane.
 
 Run everything with `cargo nextest run --workspace` (lane `fast`/`test`).
 

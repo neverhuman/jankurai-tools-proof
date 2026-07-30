@@ -65,6 +65,17 @@
     "stdout_stderr_bytes": { "type": "integer", "minimum": 0 },
     "extensions": {
       "type": "object",
+      "properties": {
+        "test_execution": {
+          "type": "object",
+          "required": ["kind", "status"],
+          "properties": {
+            "kind": { "type": "string", "enum": ["test", "example"] },
+            "status": { "type": "string", "enum": ["pass", "fail"] }
+          },
+          "additionalProperties": false
+        }
+      },
       "additionalProperties": true
     }
   },
