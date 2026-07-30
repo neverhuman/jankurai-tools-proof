@@ -106,4 +106,13 @@ impl Catalog {
             ("unmapped".into(), "unmapped".into())
         }
     }
+
+    pub(crate) fn test_command_for_path(&self, path: &str) -> Option<&str> {
+        self.test_map
+            .tests
+            .iter()
+            .filter(|(prefix, _)| prefix_matches(prefix, path))
+            .max_by(|(a, _), (b, _)| a.len().cmp(&b.len()).then(a.cmp(b)))
+            .map(|(_, spec)| spec.command.trim())
+    }
 }

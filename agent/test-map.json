@@ -65,6 +65,10 @@
       "command": "bash scripts/ci-local.sh required",
       "purpose": "verify pinned CI script entrypoints"
     },
+    "tools/": {
+      "command": "bash scripts/ci-local.sh security",
+      "purpose": "verify canonical security tool entrypoints"
+    },
     "scripts/": {
       "command": "bash scripts/ci-local.sh required",
       "purpose": "verify local CI and fusion helpers"

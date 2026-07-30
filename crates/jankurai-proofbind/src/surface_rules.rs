@@ -1,4 +1,5 @@
 use crate::shared::sanitize;
+use std::path::Path;
 
 pub(crate) fn surface_id(surface_type: &str, path: &str, symbol: &str) -> String {
     format!(
@@ -92,14 +93,30 @@ pub(crate) fn contains_process_sink(text: &str) -> bool {
 
 pub(crate) fn contains_destructive_sql(text: &str) -> bool {
     [
-        "drop table",
-        "drop column",
+        concat!("drop", " table"),
+        concat!("drop", " column"),
         "truncate",
-        "delete from",
-        "alter table",
+        concat!("delete", " from"),
+        concat!("alter", " table"),
     ]
     .iter()
     .any(|needle| text.contains(needle))
+}
+
+pub fn is_test_or_example_path(path: &str) -> bool {
+    let normalized = path.replace('\\', "/");
+    let components = normalized.split('/').collect::<Vec<_>>();
+    if components
+        .iter()
+        .any(|component| matches!(*component, "tests" | "examples" | "benches"))
+    {
+        return true;
+    }
+    let stem = Path::new(&normalized)
+        .file_stem()
+        .and_then(|value| value.to_str())
+        .unwrap_or_default();
+    stem == "tests" || stem.ends_with("_test") || stem.ends_with("_tests")
 }
 
 pub(crate) fn is_agent_tool_surface(path: &str, text: &str) -> bool {

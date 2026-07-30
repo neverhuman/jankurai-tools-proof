@@ -2,7 +2,7 @@ use crate::catalog::Catalog;
 use crate::shared::path_symbol;
 use crate::surface_rules::{
     contains_authz_marker, contains_destructive_sql, contains_input_marker, contains_process_sink,
-    is_agent_tool_surface, rust_public_symbols, surface_id,
+    is_agent_tool_surface, is_test_or_example_path, rust_public_symbols, surface_id,
 };
 use crate::{ChangedSurface, ProofObligation};
 use anyhow::{Context, Result};
@@ -20,6 +20,21 @@ pub(crate) fn classify_changed_path(
     let lower_path = path.to_ascii_lowercase();
     let lower_text = text.to_ascii_lowercase();
     let mut surfaces = Vec::new();
+
+    if lower_path.ends_with(".rs") && is_test_or_example_path(&lower_path) {
+        let (_, proof_lane) = catalog.test_for_path(path);
+        surfaces.push(surface(
+            catalog,
+            path,
+            &path_symbol(path),
+            "test_execution",
+            "medium",
+            vec!["changed_behavior", "typed_test_execution"],
+            vec!["HLT-008-FALSE-GREEN-RISK"],
+            vec![proof_lane.as_str()],
+        ));
+        return Ok(surfaces);
+    }
 
     if lower_path.ends_with(".rs") {
         for symbol in rust_public_symbols(&text) {
@@ -156,6 +171,12 @@ pub(crate) fn classify_changed_path(
     }
 
     if surfaces.is_empty() {
+        let (_, proof_lane) = catalog.test_for_path(path);
+        let required_lane = if lower_path.ends_with(".rs") {
+            "proofmark-rust"
+        } else {
+            proof_lane.as_str()
+        };
         surfaces.push(surface(
             catalog,
             path,
@@ -164,7 +185,7 @@ pub(crate) fn classify_changed_path(
             "medium",
             vec!["changed_behavior"],
             vec!["HLT-008-FALSE-GREEN-RISK"],
-            vec!["proofmark-rust"],
+            vec![required_lane],
         ));
     }
 
@@ -201,8 +222,11 @@ fn surface(
     }
 }
 
-fn required_receipt_kinds(surface: &ChangedSurface) -> Vec<String> {
+pub(crate) fn required_receipt_kinds(surface: &ChangedSurface) -> Vec<String> {
     let mut kinds = vec!["proof-receipt".to_string()];
+    if surface.surface_type == "test_execution" {
+        kinds.push("test-execution".into());
+    }
     if surface
         .required_lanes
         .iter()
@@ -251,6 +275,7 @@ fn repair_tasks(surface_type: &str, severity: &str) -> Vec<String> {
 pub(crate) fn obligation_for_surface(
     surface: &ChangedSurface,
     receipts: &[crate::receipts::ReceiptEvidence],
+    catalog: &Catalog,
 ) -> ProofObligation {
     let obligation_id = format!(
         "obligation:{}:{}",
@@ -261,13 +286,12 @@ pub(crate) fn obligation_for_surface(
         surface.surface_id
     );
     let mut receipt_paths = Vec::new();
-    for receipt in receipts {
-        if crate::receipts::receipt_satisfies(&obligation_id, surface, receipt) {
-            receipt_paths.push(receipt.path.clone());
-        }
-    }
-    receipt_paths.sort();
-    receipt_paths.dedup();
+    receipt_paths.extend(crate::receipts::satisfying_receipt_paths(
+        &obligation_id,
+        surface,
+        receipts,
+        catalog.test_command_for_path(&surface.path),
+    ));
     let satisfied = !receipt_paths.is_empty();
     ProofObligation {
         obligation_id,

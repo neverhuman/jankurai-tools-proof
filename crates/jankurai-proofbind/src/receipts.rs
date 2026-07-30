@@ -1,6 +1,6 @@
 use anyhow::{Context, Result};
 use serde_json::Value;
-use std::collections::BTreeMap;
+use std::collections::{BTreeMap, BTreeSet};
 use std::fs;
 use std::path::Path;
 
@@ -9,13 +9,15 @@ use crate::ChangedSurface;
 #[derive(Debug, Clone)]
 pub(crate) struct ReceiptEvidence {
     pub lane: String,
+    pub command: String,
     pub exit_code: i64,
     pub path: String,
     pub changed_paths: Vec<String>,
     pub rules_covered: Vec<String>,
     pub full_repository_scope: bool,
-    pub satisfied_obligations: Vec<String>,
     pub proofmark_results: BTreeMap<String, String>,
+    pub proofmark_negative_results: BTreeMap<String, String>,
+    pub typed_test_execution: Option<String>,
 }
 
 pub(crate) fn load_receipts(repo: &Path, path: Option<&Path>) -> Result<Vec<ReceiptEvidence>> {
@@ -53,33 +55,27 @@ pub(crate) fn load_receipts(repo: &Path, path: Option<&Path>) -> Result<Vec<Rece
     Ok(receipts)
 }
 
-pub(crate) fn receipt_satisfies(
+fn receipt_matches_surface(
     obligation_id: &str,
     surface: &ChangedSurface,
     receipt: &ReceiptEvidence,
+    declared_test_command: Option<&str>,
 ) -> bool {
     if receipt.exit_code != 0 {
         return false;
     }
-    if receipt
-        .satisfied_obligations
-        .iter()
-        .any(|id| id == obligation_id)
-        || receipt
-            .proofmark_results
-            .get(obligation_id)
-            .is_some_and(|status| status == "pass")
-    {
-        return true;
-    }
-    if receipt.lane == "proofmark-rust" {
-        return false;
-    }
-    let lane_matches = surface
+    if !surface
         .required_lanes
         .iter()
-        .any(|lane| lane == &receipt.lane);
-    if !lane_matches {
+        .any(|lane| lane == &receipt.lane)
+    {
+        return false;
+    }
+    if matches!(
+        surface.surface_type.as_str(),
+        "test_execution" | "business_invariant"
+    ) && declared_test_command.is_some_and(|command| command != receipt.command.trim())
+    {
         return false;
     }
     let path_matches = (receipt.changed_paths.is_empty() && receipt.full_repository_scope)
@@ -90,14 +86,102 @@ pub(crate) fn receipt_satisfies(
     if !path_matches {
         return false;
     }
-    if surface.required_rules.is_empty() {
-        return true;
+    let rules_match = surface
+        .required_rules
+        .iter()
+        .all(|rule| receipt.rules_covered.iter().any(|covered| covered == rule));
+    if !rules_match {
+        return false;
     }
-    !receipt.rules_covered.is_empty()
+    if receipt.lane == "proofmark-rust" {
+        return receipt
+            .proofmark_results
+            .get(obligation_id)
+            .is_some_and(|status| status == "pass");
+    }
+    true
+}
+
+fn receipt_kinds_for(
+    obligation_id: &str,
+    surface: &ChangedSurface,
+    receipt: &ReceiptEvidence,
+    declared_test_command: Option<&str>,
+) -> BTreeSet<&'static str> {
+    let mut kinds = BTreeSet::from(["proof-receipt"]);
+    if receipt.lane == "proofmark-rust"
+        && receipt
+            .proofmark_results
+            .get(obligation_id)
+            .is_some_and(|status| status == "pass")
+    {
+        kinds.insert("proofmark");
+        if receipt
+            .proofmark_negative_results
+            .get(obligation_id)
+            .is_some_and(|status| status == "present")
+        {
+            kinds.insert("negative-behavior-proof");
+        }
+    }
+    let normalized = surface.path.replace('\\', "/");
+    let expected_kind = if normalized.starts_with("examples/") || normalized.contains("/examples/")
+    {
+        "example"
+    } else {
+        "test"
+    };
+    if receipt.typed_test_execution.as_deref() == Some(expected_kind)
+        && declared_test_command.is_some_and(|command| command == receipt.command.trim())
         && surface
-            .required_rules
+            .required_lanes
             .iter()
-            .any(|rule| receipt.rules_covered.iter().any(|covered| covered == rule))
+            .any(|lane| lane == &receipt.lane)
+    {
+        kinds.insert("test-execution");
+    }
+    kinds
+}
+
+pub(crate) fn satisfying_receipt_paths(
+    obligation_id: &str,
+    surface: &ChangedSurface,
+    receipts: &[ReceiptEvidence],
+    declared_test_command: Option<&str>,
+) -> Vec<String> {
+    let matching = receipts
+        .iter()
+        .filter(|receipt| {
+            receipt_matches_surface(obligation_id, surface, receipt, declared_test_command)
+        })
+        .collect::<Vec<_>>();
+    let lanes = matching
+        .iter()
+        .map(|receipt| receipt.lane.as_str())
+        .collect::<BTreeSet<_>>();
+    let kinds = matching
+        .iter()
+        .flat_map(|receipt| {
+            receipt_kinds_for(obligation_id, surface, receipt, declared_test_command)
+        })
+        .collect::<BTreeSet<_>>();
+    if !surface
+        .required_lanes
+        .iter()
+        .all(|lane| lanes.contains(lane.as_str()))
+        || !crate::classify::required_receipt_kinds(surface)
+            .iter()
+            .all(|kind| kinds.contains(kind.as_str()))
+    {
+        return Vec::new();
+    }
+    let mut paths = matching
+        .iter()
+        .map(|receipt| receipt.path.clone())
+        .collect::<Vec<_>>();
+    paths.sort();
+    paths.dedup();
+    paths
 }
 
 fn receipt_from_value(repo: &Path, entry: &Path, value: &Value) -> ReceiptEvidence {
@@ -106,6 +190,11 @@ fn receipt_from_value(repo: &Path, entry: &Path, value: &Value) -> ReceiptEviden
     } else {
         "unknown".into()
     };
+    let command = value
+        .get("command")
+        .and_then(Value::as_str)
+        .unwrap_or_default()
+        .to_string();
     let exit_code = value.get("exit_code").and_then(Value::as_i64).unwrap_or(1);
     let changed_paths = if let Some(items) = value.get("changed_paths").and_then(Value::as_array) {
         items
@@ -140,19 +229,8 @@ fn receipt_from_value(repo: &Path, entry: &Path, value: &Value) -> ReceiptEviden
         } else {
             &null_value
         };
-    let satisfied_obligations = if let Some(items) = proofmark
-        .get("satisfied_obligations")
-        .and_then(Value::as_array)
-    {
-        items
-            .iter()
-            .filter_map(Value::as_str)
-            .map(str::to_string)
-            .collect::<Vec<_>>()
-    } else {
-        Vec::new()
-    };
     let mut proofmark_results = BTreeMap::new();
+    let mut proofmark_negative_results = BTreeMap::new();
     if let Some(items) = proofmark
         .get("obligation_results")
         .and_then(Value::as_array)
@@ -166,6 +244,11 @@ fn receipt_from_value(repo: &Path, entry: &Path, value: &Value) -> ReceiptEviden
                 .and_then(Value::as_str)
                 .unwrap_or("unknown");
             proofmark_results.insert(id.to_string(), status.to_string());
+            let negative_status = item
+                .get("negative_proof_status")
+                .and_then(Value::as_str)
+                .unwrap_or("unknown");
+            proofmark_negative_results.insert(id.to_string(), negative_status.to_string());
         }
     }
     let full_repository_scope = value
@@ -178,15 +261,25 @@ fn receipt_from_value(repo: &Path, entry: &Path, value: &Value) -> ReceiptEviden
             .and_then(|extensions| extensions.get("scope"))
             .and_then(Value::as_str)
             .is_some_and(|scope| scope == "full-repository" || scope == "full_repository");
+    let typed_test_execution = value
+        .get("extensions")
+        .and_then(|extensions| extensions.get("test_execution"))
+        .filter(|execution| execution.get("status").and_then(Value::as_str) == Some("pass"))
+        .and_then(|execution| execution.get("kind"))
+        .and_then(Value::as_str)
+        .filter(|kind| matches!(*kind, "test" | "example"))
+        .map(str::to_string);
     ReceiptEvidence {
         lane,
+        command,
         exit_code,
         path: display_rel(repo, entry),
         changed_paths,
         rules_covered,
         full_repository_scope,
-        satisfied_obligations,
         proofmark_results,
+        proofmark_negative_results,
+        typed_test_execution,
     }
 }
 

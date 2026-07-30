@@ -21,6 +21,12 @@ fast:
     cargo check --workspace --locked
     cargo nextest run --workspace
 
+test-proofbind:
+    cargo nextest run -p jankurai-proofbind
+
+test-proofmark:
+    cargo nextest run -p jankurai-proofmark
+
 # Run the full local check: format, lint, fast lane, security, and audit.
 check: fmt lint fast security audit
 
@@ -49,7 +55,7 @@ security:
 
 # Jankurai self-audit lane: writes the repo-score artifacts that CI uploads.
 audit:
-    /home/ubuntu/jankurai-split/jankurai/.fusion/target/debug/jankurai audit . --no-score-history --json .jankurai/repo-score.json --md .jankurai/repo-score.md
+    bash ops/ci/governed-jankurai audit . --full --no-score-history --json .jankurai/repo-score.json --md .jankurai/repo-score.md
 
 # Print the declared version.
 versions:

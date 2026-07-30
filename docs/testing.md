@@ -21,7 +21,18 @@ machine-readable route lives in [`agent/test-map.json`](../agent/test-map.json).
 - **`jankurai-proofmark`** carries integration tests under
   `crates/jankurai-proofmark/tests/` that prove obligations move from `review`
   to `pass` only when the matching coverage, mutation, and negative-behavior
-  proof receipts are present.
+  proof receipts are present. Its hostiles retain zero-hit LCOV lines, reject
+  legacy hit-only JSON as an executable-universe claim, reject absent production
+  coverage, and keep test/example source out of the production LCOV denominator.
+- **Receipt completeness** tests prove that every required lane and receipt kind
+  must be present. Test and example sources accept only a successful typed
+  `extensions.test_execution` receipt with the right kind, lane, and exact
+  declared command. Non-Rust mapped surfaces likewise require the exact
+  declared command; self-asserted `true` receipts remain missing.
+- **Non-circular lane proof** is required. A script cannot use its own not-yet-
+  completed receipt as evidence. Map the implementation path to a lower-level
+  focused hostile/contract lane; the outer orchestrator may emit the higher-
+  level lane receipt only after that command actually returns successfully.
 
 Run everything with `cargo nextest run --workspace` (lane `fast`/`test`).
 

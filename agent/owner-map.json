@@ -14,6 +14,7 @@
     ".github/": "ops",
     "agent/": "agent",
     "ops/": "ops",
+    "tools/": "ops",
     "scripts/": "ops",
     "docs/": "standard",
     "schemas/": "standard",

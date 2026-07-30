@@ -165,7 +165,7 @@ pub fn build_proofbind(request: ProofBindRequest) -> Result<ProofBindOutput> {
     let receipts = load_receipts(&repo, request.proof_receipts.as_deref())?;
     let mut obligations = surfaces
         .iter()
-        .map(|surface| obligation_for_surface(surface, &receipts))
+        .map(|surface| obligation_for_surface(surface, &receipts, &catalog))
         .collect::<Vec<_>>();
     obligations.sort_by(|a, b| a.obligation_id.cmp(&b.obligation_id));
 
