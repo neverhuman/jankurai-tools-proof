@@ -9,7 +9,7 @@ cd "$REPO_ROOT"
 
 mkdir -p .jankurai
 log "audit lane: jankurai audit -> .jankurai/repo-score.{json,md}"
-run_public_jankurai audit . --full --no-score-history \
+run_public_jankurai audit . --no-score-history --full \
   --json .jankurai/repo-score.json \
   --md .jankurai/repo-score.md
 

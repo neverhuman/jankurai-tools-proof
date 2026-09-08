@@ -39,7 +39,7 @@ log "tool-adoption: fixed-predecessor diff ratchet"
   target/jankurai/diff/proof-plan.json >/dev/null
 
 log "tool-adoption: full candidate audit"
-run_public_jankurai audit . --full --mode advisory \
+run_public_jankurai audit . --mode advisory --full \
   --policy agent/audit-policy.toml \
   --json target/jankurai/repo-score.json \
   --md target/jankurai/repo-score.md \
