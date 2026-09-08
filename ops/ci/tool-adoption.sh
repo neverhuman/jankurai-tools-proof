@@ -38,8 +38,9 @@ log "tool-adoption: fixed-predecessor diff ratchet"
   '.base_ref == $base and (.changed_paths | length > 0)' \
   target/jankurai/diff/proof-plan.json >/dev/null
 
-log "tool-adoption: full candidate audit"
-run_public_jankurai audit . --mode advisory --full \
+log "tool-adoption: full candidate ratchet audit"
+run_public_jankurai audit . --mode ratchet --full \
+  --baseline target/jankurai/accepted-baseline.json \
   --policy agent/audit-policy.toml \
   --json target/jankurai/repo-score.json \
   --md target/jankurai/repo-score.md \
