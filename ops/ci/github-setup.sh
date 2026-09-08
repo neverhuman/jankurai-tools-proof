@@ -10,9 +10,7 @@ if [[ "${GITHUB_ACTIONS:-}" == true ]]; then
   if [[ -f paper/jankurai.tex ]]; then
     sudo apt-get install -y latexmk texlive-latex-extra texlive-fonts-recommended
   fi
-  GOBIN="${CARGO_HOME:-$HOME/.cargo}/bin" go install github.com/gitleaks/gitleaks/v8@v8.21.2
-  GOBIN="${CARGO_HOME:-$HOME/.cargo}/bin" go install github.com/rhysd/actionlint/cmd/actionlint@v1.7.8
-  GOBIN="${CARGO_HOME:-$HOME/.cargo}/bin" go install github.com/anchore/grype/cmd/grype@v0.99.0
+  bash ops/ci/install-security-tools.sh
 fi
 if [[ -f Cargo.toml ]]; then cargo fetch --locked; fi
 if [[ -f package-lock.json ]]; then npm ci; fi
@@ -29,6 +27,7 @@ cargo test --manifest-path "$source_root/core/Cargo.toml" --locked -p jankurai -
   2>&1 | tee "$repo_root/target/jankurai/language-bad-behavior.log"
 
 rustup toolchain install nightly-2026-06-16 --profile minimal
+cargo install cargo-public-api --version 0.52.0 --locked
 rustup component add llvm-tools-preview
 sha256sum target/ci-tools/bin/jankurai > target/ci-tools/auditor.sha256
 printf '%s\n' af340cf595fc4c3e1d822adcddc5092eb5ea3400 > target/ci-tools/auditor-source-revision
