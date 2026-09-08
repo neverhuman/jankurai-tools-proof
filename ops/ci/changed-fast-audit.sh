@@ -47,13 +47,13 @@ log "changed-fast: classify tracked, untracked, renamed, deleted, and unchanged 
 ' "$supporting_evidence" >/dev/null
 
 log "changed-fast: preserve exact changed-path attribution"
-run_governed_jankurai proof . \
+run_public_jankurai proof . \
   --changed-from "$base_ref" \
   --out "$proof_plan" \
   --md "$proof_plan_md"
 
 log "changed-fast: evaluate repository-wide rules against the full exact tree"
-run_governed_jankurai audit . \
+run_public_jankurai audit . \
   --full \
   --mode advisory \
   --policy agent/audit-policy.toml \

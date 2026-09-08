@@ -20,6 +20,7 @@
     "schemas/": "standard",
     "Cargo.toml": "tools",
     "Cargo.lock": "tools",
-    "crates/": "tools"
+    "crates/": "tools",
+    ".gitleaksignore": "ops"
   }
 }

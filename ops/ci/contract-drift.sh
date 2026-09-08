@@ -7,9 +7,9 @@ cd "$REPO_ROOT"
 
 readonly baseline="agent/public-api-baseline.json"
 readonly output_root="$REPO_ROOT/target/jankurai/public-api"
-readonly governed_toolchain="nightly-x86_64-unknown-linux-gnu"
+readonly governed_toolchain="nightly-2026-06-16-x86_64-unknown-linux-gnu"
 readonly governed_rustdoc_version="rustdoc 1.98.0-nightly (01dfd7924 2026-06-15)"
-readonly governed_rustdoc="/home/ubuntu/.rustup/toolchains/$governed_toolchain/bin/rustdoc"
+readonly governed_rustdoc="$(rustup which --toolchain "$governed_toolchain" rustdoc)"
 
 if [[ ! -f "$baseline" || -L "$baseline" ]]; then
   printf '[ci] public API baseline is unavailable\n' >&2
@@ -62,16 +62,16 @@ for package in jankurai-governed-launcher jankurai-proofbind jankurai-proofmark;
   output="$output_root/$package.txt"
   temporary="$(/usr/bin/mktemp "$output.tmp.XXXXXX")"
   /usr/bin/env -i \
-    CARGO_HOME=/home/ubuntu/.cargo \
+    CARGO_HOME=${CARGO_HOME:-$HOME/.cargo} \
     CARGO_NET_OFFLINE=true \
     CARGO_TARGET_DIR="$REPO_ROOT/target/public-api" \
     GIT_CONFIG_GLOBAL=/dev/null \
     GIT_CONFIG_NOSYSTEM=1 \
-    HOME=/nonexistent \
+    HOME="$HOME" \
     LANG=C.UTF-8 \
     LC_ALL=C.UTF-8 \
-    PATH="/home/ubuntu/.rustup/toolchains/$governed_toolchain/bin:/home/ubuntu/.cargo/bin:/usr/bin:/bin" \
-    RUSTUP_HOME=/home/ubuntu/.rustup \
+    PATH="${RUSTUP_HOME:-$HOME/.rustup}/toolchains/$governed_toolchain/bin:${CARGO_HOME:-$HOME/.cargo}/bin:/usr/bin:/bin" \
+    RUSTUP_HOME=${RUSTUP_HOME:-$HOME/.rustup} \
     RUSTUP_TOOLCHAIN="$governed_toolchain" \
     TZ=UTC \
     "$CARGO_PUBLIC_API_BIN" --package "$package" \

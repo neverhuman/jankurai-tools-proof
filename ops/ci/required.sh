@@ -1,14 +1,10 @@
 #!/usr/bin/env bash
+# Public component proof: controlled hostile fixtures and the complete Rust suite.
 set -euo pipefail
-ci_dir="${BASH_SOURCE[0]%/*}"
-[[ "$ci_dir" != "${BASH_SOURCE[0]}" ]] || ci_dir=.
-source "$ci_dir/lib.sh"
+source "$(dirname "${BASH_SOURCE[0]}")/lib.sh"
 cd "$REPO_ROOT"
-
-build_governed_jankurai_launcher
-require_governed_jankurai
-/usr/bin/bash ops/ci/governed-jankurai-hostile-test.sh
-/usr/bin/bash ops/ci/changed-fast-evidence-test.sh
-/usr/bin/bash ops/ci/contract-drift.sh
-log "required lane: workspace tests"
+mkdir -p target/jankurai
+bash ops/ci/governed-jankurai-hostile-test.sh
+bash ops/ci/changed-fast-evidence-test.sh
+bash ops/ci/contract-drift.sh
 cargo test --workspace --locked

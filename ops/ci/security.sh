@@ -9,8 +9,8 @@ source "$ci_dir/lib.sh"
 cd "$REPO_ROOT"
 
 log "security lane: gitleaks + cargo audit + syft SBOM + actionlint"
-/home/ubuntu/.local/bin/gitleaks detect --source . --no-banner --redact
-/home/ubuntu/.local/bin/cargo-audit audit --no-fetch
+gitleaks detect --source . --no-banner --redact
+cargo audit
 mkdir -p target/jankurai
-/home/ubuntu/.local/bin/syft scan dir:. -o cyclonedx-json=target/jankurai/sbom.json
-/home/ubuntu/.local/bin/actionlint .github/workflows/ci.yml
+syft scan dir:. -o cyclonedx-json=target/jankurai/sbom.json
+actionlint .github/workflows/ci.yml

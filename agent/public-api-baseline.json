@@ -1,7 +1,7 @@
 {
   "schema_version": "jankurai.public-api-baseline/v1",
   "cargo_public_api_version": "cargo-public-api 0.52.0",
-  "rustdoc_toolchain": "nightly-x86_64-unknown-linux-gnu",
+  "rustdoc_toolchain": "nightly-2026-06-16-x86_64-unknown-linux-gnu",
   "rustdoc_version": "rustdoc 1.98.0-nightly (01dfd7924 2026-06-15)",
   "simplification": 3,
   "packages": {

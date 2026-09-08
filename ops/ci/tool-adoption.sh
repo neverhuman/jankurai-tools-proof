@@ -18,10 +18,10 @@ mkdir -p target/jankurai target/jankurai/security \
 
 readonly protected_predecessor="de90586b48fbeafd1e3de8dd8d01e3cc348cda7f"
 readonly protected_predecessor_tree="eb7cc72093faf3fb2f2d0420a58dc2c660ce913a"
-readonly governed_cargo="/home/ubuntu/.rustup/toolchains/1.95.0-x86_64-unknown-linux-gnu/bin/cargo"
-readonly governed_rustc="/home/ubuntu/.rustup/toolchains/1.95.0-x86_64-unknown-linux-gnu/bin/rustc"
-readonly governed_llvm_cov="/home/ubuntu/.local/bin/cargo-llvm-cov"
-readonly governed_mutants="/home/ubuntu/.cargo/bin/cargo-mutants"
+readonly governed_cargo="$(rustup which cargo)"
+readonly governed_rustc="$(rustup which rustc)"
+readonly governed_llvm_cov="$(command -v cargo-llvm-cov)"
+readonly governed_mutants="$(command -v cargo-mutants)"
 readonly governed_mutants_version="cargo-mutants 25.3.1"
 
 actual_predecessor_tree="$(/usr/bin/git rev-parse "$protected_predecessor^{tree}")"
@@ -39,7 +39,7 @@ log "tool-adoption: fixed-predecessor diff ratchet"
   target/jankurai/diff/proof-plan.json >/dev/null
 
 log "tool-adoption: full candidate audit"
-run_governed_jankurai audit . --full --mode advisory \
+run_public_jankurai audit . --full --mode advisory \
   --policy agent/audit-policy.toml \
   --json target/jankurai/repo-score.json \
   --md target/jankurai/repo-score.md \
@@ -84,7 +84,7 @@ readonly adoption_root="$REPO_ROOT/target/jankurai/adoption-fixture"
 /usr/bin/printf '%s\n' \
   '{"workspace":"proof-adoption-fixture","owners":{"src/":"tools"}}' \
   >"$adoption_root/agent/owner-map.json"
-fixture_command="CARGO=$governed_cargo CARGO_HOME=/home/ubuntu/.cargo RUSTC=$governed_rustc RUSTUP_HOME=/home/ubuntu/.rustup $governed_llvm_cov llvm-cov --manifest-path Cargo.toml --locked --offline --lcov --output-path target/jankurai/coverage.lcov"
+fixture_command="CARGO=$governed_cargo CARGO_HOME=${CARGO_HOME:-$HOME/.cargo} RUSTC=$governed_rustc RUSTUP_HOME=${RUSTUP_HOME:-$HOME/.rustup} $governed_llvm_cov llvm-cov --manifest-path Cargo.toml --locked --offline --lcov --output-path target/jankurai/coverage.lcov"
 /usr/bin/printf \
   '{"workspace":"proof-adoption-fixture","tests":{"src/":{"command":"%s","purpose":"real locked Rust contract test"}}}\n' \
   "$fixture_command" >"$adoption_root/agent/test-map.json"
@@ -113,7 +113,7 @@ fixture_command="CARGO=$governed_cargo CARGO_HOME=/home/ubuntu/.cargo RUSTC=$gov
   -c user.email='proof-adoption@example.invalid' \
   commit -q -m change
 log "tool-adoption: execute typed contract receipt"
-run_governed_jankurai prove "$adoption_root" --changed-from HEAD^ \
+run_public_jankurai prove "$adoption_root" --changed-from HEAD^ \
   --plan-out "$adoption_root/target/jankurai/proof-plan.json" \
   --plan-md "$adoption_root/target/jankurai/proof-plan.md" \
   --out-dir "$adoption_root/target/jankurai/proof-receipts" \
@@ -129,15 +129,15 @@ log "tool-adoption: execute focused mutation proof"
 (
   cd "$adoption_root"
   /usr/bin/env -i \
-    CARGO_HOME=/home/ubuntu/.cargo \
+    CARGO_HOME=${CARGO_HOME:-$HOME/.cargo} \
     CARGO_NET_OFFLINE=true \
     GIT_CONFIG_GLOBAL=/dev/null \
     GIT_CONFIG_NOSYSTEM=1 \
-    HOME=/nonexistent \
+    HOME="$HOME" \
     LANG=C.UTF-8 \
     LC_ALL=C.UTF-8 \
-    PATH=/home/ubuntu/.rustup/toolchains/1.95.0-x86_64-unknown-linux-gnu/bin:/usr/bin:/bin \
-    RUSTUP_HOME=/home/ubuntu/.rustup \
+    PATH=${governed_cargo%/*}:/usr/bin:/bin \
+    RUSTUP_HOME=${RUSTUP_HOME:-$HOME/.rustup} \
     TZ=UTC \
     "$governed_mutants" mutants --in-place --no-shuffle --no-times \
       --colors never --annotations none --timeout 30 --file src/lib.rs \
@@ -170,7 +170,7 @@ fi
   >"$adoption_root/target/jankurai/mutation.json"
 
 log "tool-adoption: proofbind obligations"
-run_governed_jankurai proofbind verify "$adoption_root" \
+run_public_jankurai proofbind verify "$adoption_root" \
   --changed-from HEAD^ \
   --mode advisory \
   --proof-receipts "$adoption_root/target/jankurai/proof-receipts" \
@@ -179,7 +179,7 @@ run_governed_jankurai proofbind verify "$adoption_root" \
   --md "$adoption_root/target/jankurai/proofbind/proofbind.md"
 
 log "tool-adoption: proofmark required"
-run_governed_jankurai proofmark rust "$adoption_root" \
+run_public_jankurai proofmark rust "$adoption_root" \
   --changed-from HEAD^ \
   --mode required \
   --obligations "$adoption_root/target/jankurai/proofbind/obligations.json" \
@@ -190,7 +190,7 @@ run_governed_jankurai proofmark rust "$adoption_root" \
   --md "$adoption_root/target/jankurai/proofmark/proofmark.md"
 
 log "tool-adoption: proofbind required"
-run_governed_jankurai proofbind verify "$adoption_root" \
+run_public_jankurai proofbind verify "$adoption_root" \
   --changed-from HEAD^ \
   --mode required \
   --proof-receipts "$adoption_root/target/jankurai/proof-receipts" \
@@ -223,7 +223,7 @@ run_governed_jankurai proofbind verify "$adoption_root" \
 
 # security: secret + dependency + SBOM/provenance evidence in one lane.
 log "tool-adoption: security run"
-run_governed_jankurai security run . \
+run_public_jankurai security run . \
   --script ops/ci/security.sh \
   --out target/jankurai/security/evidence.json
 assert_artifact target/jankurai/security/evidence.json

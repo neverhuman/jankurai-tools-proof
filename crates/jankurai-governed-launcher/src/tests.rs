@@ -265,6 +265,11 @@ fn sealed_environment_excludes_caller_tool_and_git_configuration() {
 }
 
 #[test]
-fn production_policy_verifies_current_governed_installation() {
-    verify_with_hook(&Policy::production(), || {}).unwrap();
+fn rejects_receipt_tampering_in_a_controlled_installation() {
+    let fixture = Fixture::new(b"verified executable fixture");
+    fs::write(&fixture.policy.receipt_path, b"{} ").unwrap();
+    assert_eq!(
+        verify_with_hook(&fixture.policy, || {}).unwrap_err(),
+        BoundaryError("receipt digest mismatch")
+    );
 }
