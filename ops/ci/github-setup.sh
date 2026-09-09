@@ -30,4 +30,4 @@ rustup toolchain install nightly-2026-06-16 --profile minimal
 cargo install cargo-public-api --version 0.52.0 --locked
 rustup component add llvm-tools-preview
 sha256sum target/ci-tools/bin/jankurai > target/ci-tools/auditor.sha256
-printf '%s\n' 8505079e47597225e1f2bf65f57d41b0d050bfe7 > target/ci-tools/auditor-source-revision
+printf '%s\n' af340cf595fc4c3e1d822adcddc5092eb5ea3400 > target/ci-tools/auditor-source-revision
