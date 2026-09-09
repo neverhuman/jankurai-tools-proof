@@ -6,6 +6,8 @@ tooling crates extracted from the main auditor:
 ```text
 crates/jankurai-proofbind   semantic surface routing + proof obligation binding
 crates/jankurai-proofmark   changed-behavior proof receipt engine
+crates/jankurai-governed-launcher
+                             installed-auditor identity and execution boundary
 schemas/                    JSON Schemas for the proof artifacts both crates emit
 ```
 
@@ -19,15 +21,37 @@ library entrypoints; the pure routing and receipt logic is deterministic.
 - **`jankurai-proofbind`** classifies changed paths into semantic surfaces
   (public API, authz boundary, input boundary, agent-tool supply) and binds each
   surface to the proof obligations and required receipt kinds it must satisfy.
+  Every declared lane and receipt kind is conjunctive. Changed test and example
+  sources require a successful typed `test_execution` receipt on the declared
+  lane whose `command` exactly matches the test-map/proof-lane command.
+  Non-Rust fallback surfaces use that same declared-command binding rather than
+  an impossible Rust Proofmark requirement. A lane may not satisfy an
+  obligation by claiming an exact obligation ID or by reporting `command=true`.
+  Agent-tool surfaces route to their exact test-map/proof-lane command. The
+  reviewed lane declaration and the emitted receipt must both bind every
+  required rule; missing, duplicate, malformed, partial, wrong-path, or
+  self-asserted rule coverage remains unsatisfied.
 - **`jankurai-proofmark`** ingests obligations plus coverage, mutation, and
   negative-proof evidence and writes a proof receipt that marks each obligation
-  as `pass`, `review`, or `missing`.
+  as `pass`, `review`, or `missing`. The fixed Git change and candidate source
+  define potentially executable changed lines; LCOV `DA` entries then prove
+  which of those lines are coverable and hit. An executable changed line absent
+  from LCOV is uncovered, so partial or empty intersections cannot pass.
+  Declarations and structural-only Rust lines remain outside the executable
+  denominator. Legacy JSON that reports hits without `coverable_lines` has no
+  trusted executable universe and remains `review`/`block`.
+- **`jankurai-governed-launcher`** opens the installed auditor and installation
+  receipt through descriptor-held, no-follow filesystem custody, validates
+  owner, mode, link count, bounded size, exact SHA-256, and receipt fields,
+  seals an exact memfd copy, and executes it with a fixed minimal environment.
+  Caller-selected `PATH`, Cargo, Git, home, wrapper, and diff configuration
+  cannot replace the governed executable or its build/runtime authority.
 
 ## Local workspace ownership
 
 | Path | Role |
 | --- | --- |
-| `crates/` | proofbind + proofmark Rust crates (library + tests) |
+| `crates/` | proofbind, proofmark, and governed-launcher Rust crates |
 | `schemas/` | JSON Schemas for proof plans, witnesses, obligations, and receipts |
 | `agent/` | machine-readable owner, test, boundary, and proof maps |
 | `docs/` | architecture, testing, boundaries, release, and exception docs |

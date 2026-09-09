@@ -11,6 +11,7 @@ use crate::report::{
 };
 use crate::shared::{elapsed_ms, git_output, resolve_changed_paths, unix_seconds};
 use crate::{ProofMarkMode, ProofMarkOutput, ProofMarkReceipt};
+use jankurai_proofbind::surface_rules::is_test_or_example_path;
 
 #[allow(clippy::too_many_arguments)]
 pub(crate) fn build_proofmark_output(
@@ -33,7 +34,7 @@ pub(crate) fn build_proofmark_output(
     let changed_lines = changed_lines_for_paths(&repo, changed_from.as_deref(), &changed_paths);
     let changed_units = changed_paths
         .iter()
-        .filter(|path| path.ends_with(".rs"))
+        .filter(|path| path.ends_with(".rs") && !is_test_or_example_path(path))
         .map(|path| changed_unit(path, changed_lines.get(path), &coverage))
         .collect::<Vec<_>>();
 
@@ -49,7 +50,7 @@ pub(crate) fn build_proofmark_output(
                 .required_lanes
                 .iter()
                 .any(|lane| lane == "proofmark-rust")
-                || obligation.path.ends_with(".rs")
+                && !is_test_or_example_path(&obligation.path)
         })
         .map(|obligation| {
             obligation_result(obligation, &changed_units, &mutation, &negative_proofs)

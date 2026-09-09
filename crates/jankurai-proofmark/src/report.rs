@@ -119,7 +119,8 @@ pub(crate) fn proofmark_summary(
         .filter(|result| result.status == "pass")
         .count();
     let review = results.len().saturating_sub(satisfied);
-    let verdict = if review == 0 {
+    let unit_review = units.iter().any(|unit| unit.coverage_status != "pass");
+    let verdict = if review == 0 && !unit_review {
         "pass"
     } else if mode == ProofMarkMode::Required {
         "block"
@@ -143,22 +144,51 @@ pub(crate) fn changed_unit(
     let changed_lines = match changed_lines {
         Some(lines) => lines.clone(),
         None => BTreeSet::from([1]),
+    };
+    if !coverage.loaded {
+        let changed_lines = changed_lines.into_iter().collect::<Vec<_>>();
+        return ChangedUnit {
+            path: path.into(),
+            unit: path_symbol(path),
+            uncovered_changed_lines: changed_lines.clone(),
+            changed_lines,
+            covered_changed_lines: Vec::new(),
+            coverage_status: "unavailable".into(),
+        };
     }
-    .into_iter()
-    .collect::<Vec<_>>();
-    let covered = coverage.covered_lines(path);
+    let Some(file_coverage) = coverage.file_coverage(path) else {
+        let changed_lines = changed_lines.into_iter().collect::<Vec<_>>();
+        return ChangedUnit {
+            path: path.into(),
+            unit: path_symbol(path),
+            uncovered_changed_lines: changed_lines.clone(),
+            changed_lines,
+            covered_changed_lines: Vec::new(),
+            coverage_status: "review".into(),
+        };
+    };
+    if file_coverage.coverable.is_empty() {
+        let changed_lines = changed_lines.into_iter().collect::<Vec<_>>();
+        return ChangedUnit {
+            path: path.into(),
+            unit: path_symbol(path),
+            uncovered_changed_lines: changed_lines.clone(),
+            changed_lines,
+            covered_changed_lines: Vec::new(),
+            coverage_status: "review".into(),
+        };
+    }
+    let changed_lines = changed_lines.into_iter().collect::<Vec<_>>();
     let mut covered_changed_lines = Vec::new();
     let mut uncovered_changed_lines = Vec::new();
     for line in &changed_lines {
-        if covered.contains(line) {
+        if file_coverage.coverable.contains(line) && file_coverage.covered.contains(line) {
             covered_changed_lines.push(*line);
         } else {
             uncovered_changed_lines.push(*line);
         }
     }
-    let coverage_status = if !coverage.loaded {
-        "unavailable"
-    } else if uncovered_changed_lines.is_empty() {
+    let coverage_status = if uncovered_changed_lines.is_empty() {
         "pass"
     } else {
         "review"
@@ -187,9 +217,10 @@ pub(crate) fn coverage_summary(
         .iter()
         .map(|unit| unit.uncovered_changed_lines.len())
         .sum();
+    let unit_review = units.iter().any(|unit| unit.coverage_status != "pass");
     let status = if !loaded {
         "unavailable"
-    } else if uncovered_changed_line_count == 0 {
+    } else if uncovered_changed_line_count == 0 && !unit_review {
         "pass"
     } else {
         "review"

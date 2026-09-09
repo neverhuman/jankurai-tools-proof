@@ -21,8 +21,19 @@ fast:
     cargo check --workspace --locked
     cargo nextest run --workspace
 
-# Run the full local check: format, lint, fast lane, security, and audit.
-check: fmt lint fast security audit
+test-proofbind:
+    cargo nextest run -p jankurai-proofbind
+
+test-proofmark:
+    cargo nextest run -p jankurai-proofmark
+
+# Regenerate every public Rust surface with pinned tools and compare the
+# reviewed digest baseline.
+contract-drift:
+    bash scripts/ci-local.sh contract-drift
+
+# Run the full local check: format, lint, fast lane, API drift, security, and audit.
+check: fmt lint fast contract-drift security audit
 
 # Verify is an alias of check for agents that look for a `verify` lane.
 verify: check
@@ -49,7 +60,7 @@ security:
 
 # Jankurai self-audit lane: writes the repo-score artifacts that CI uploads.
 audit:
-    /home/ubuntu/jankurai-split/jankurai/.fusion/target/debug/jankurai audit . --no-score-history --json .jankurai/repo-score.json --md .jankurai/repo-score.md
+    bash ops/ci/governed-jankurai audit . --full --no-score-history --json .jankurai/repo-score.json --md .jankurai/repo-score.md
 
 # Print the declared version.
 versions:

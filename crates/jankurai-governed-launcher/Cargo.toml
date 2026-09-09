@@ -1,0 +1,15 @@
+[package]
+name = "jankurai-governed-launcher"
+version = "0.8.0"
+edition = "2021"
+description = "Held-FD verifier and launcher for the governed Jankurai auditor."
+license = "MIT"
+repository = "https://github.com/neverhuman/jankurai-tools-proof"
+homepage = "https://github.com/neverhuman/jankurai"
+
+[dependencies]
+libc = "0.2"
+serde_json = "1.0"
+
+[dev-dependencies]
+tempfile = "3.23"

@@ -30,6 +30,8 @@ struct ProofLanes {
 struct ProofLane {
     name: String,
     command: String,
+    #[serde(default)]
+    rules_covered: Vec<String>,
 }
 
 #[derive(Debug, Clone, Default)]
@@ -105,5 +107,43 @@ impl Catalog {
         } else {
             ("unmapped".into(), "unmapped".into())
         }
+    }
+
+    pub(crate) fn test_command_for_path(&self, path: &str) -> Option<&str> {
+        self.test_map
+            .tests
+            .iter()
+            .filter(|(prefix, _)| prefix_matches(prefix, path))
+            .max_by(|(a, _), (b, _)| a.len().cmp(&b.len()).then(a.cmp(b)))
+            .map(|(_, spec)| spec.command.trim())
+    }
+
+    pub(crate) fn lane_authenticates_rules(
+        &self,
+        lane_name: &str,
+        command: &str,
+        required_rules: &[String],
+    ) -> bool {
+        let mut lanes = self
+            .proof_lanes
+            .lane
+            .iter()
+            .filter(|lane| lane.name == lane_name);
+        let Some(lane) = lanes.next() else {
+            return false;
+        };
+        if lanes.next().is_some() || lane.command.trim() != command.trim() {
+            return false;
+        }
+        let declared = lane
+            .rules_covered
+            .iter()
+            .collect::<std::collections::BTreeSet<_>>();
+        declared.len() == lane.rules_covered.len()
+            && lane
+                .rules_covered
+                .iter()
+                .all(|rule| !rule.is_empty() && rule.trim() == rule)
+            && required_rules.iter().all(|rule| declared.contains(rule))
     }
 }

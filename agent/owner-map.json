@@ -14,11 +14,13 @@
     ".github/": "ops",
     "agent/": "agent",
     "ops/": "ops",
+    "tools/": "ops",
     "scripts/": "ops",
     "docs/": "standard",
     "schemas/": "standard",
     "Cargo.toml": "tools",
     "Cargo.lock": "tools",
-    "crates/": "tools"
+    "crates/": "tools",
+    ".gitleaksignore": "ops"
   }
 }

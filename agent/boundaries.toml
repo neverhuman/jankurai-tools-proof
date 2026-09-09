@@ -1,16 +1,18 @@
 # Boundary manifest for jankurai-tools-proof.
-# This is a single-purpose Rust workspace: the proofbind and proofmark crates.
-# Only the Rust domain block applies here; web, database, queue, and Python
-# surfaces are not part of this repo. See docs/boundaries.md for prose.
+# This is a single-purpose Rust workspace: Proofbind, Proofmark, and the
+# governed launcher. Only the Rust domain block applies here; web, database,
+# queue, and Python surfaces are not part of this repo. See docs/boundaries.md
+# for prose.
 
 [stack]
-id = "rust-ts-vite-react-postgres-bounded-python"
+id = "rust-workspace"
 version = "0.5.0"
 
 [rust]
 domain_paths = [
   "crates/jankurai-proofbind/src",
   "crates/jankurai-proofmark/src",
+  "crates/jankurai-governed-launcher/src",
 ]
 forbidden_domain_imports = [
   "std::net",

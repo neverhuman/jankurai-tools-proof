@@ -8,6 +8,7 @@ machine-readable route lives in [`agent/test-map.json`](../agent/test-map.json).
 | `fast` | deterministic local proof for most edits (`cargo check` + `cargo nextest run`) |
 | `test` | the full workspace test suite for both crates |
 | `security` | secret scanning (`gitleaks`) plus dependency review (`cargo audit`) |
+| `contract-drift` | regenerate pinned Rust public APIs and compare exact baseline digests |
 | `audit` | jankurai repo score and hard-rule findings, written to `.jankurai/repo-score.{json,md}` |
 | `check` | release/merge gate: format, lint, fast, security, and self-audit |
 
@@ -21,9 +22,43 @@ machine-readable route lives in [`agent/test-map.json`](../agent/test-map.json).
 - **`jankurai-proofmark`** carries integration tests under
   `crates/jankurai-proofmark/tests/` that prove obligations move from `review`
   to `pass` only when the matching coverage, mutation, and negative-behavior
-  proof receipts are present.
+  proof receipts are present. Its hostiles retain zero-hit LCOV lines, reject
+  legacy hit-only JSON as an executable-universe claim, reject omitted added
+  executable lines and empty LCOV intersections, reject absent production
+  coverage, and keep test/example source out of the production LCOV denominator.
+- **Receipt completeness** tests prove that every required lane and receipt kind
+  must be present. Test and example sources accept only a successful typed
+  `extensions.test_execution` receipt with the right kind, lane, and exact
+  declared command. Non-Rust mapped surfaces likewise require the exact
+  declared command; self-asserted `true` receipts remain missing.
+- **Agent-tool rule binding** tests require a unique reviewed proof-lane
+  declaration and an exact-command receipt whose closed `rules_covered` objects
+  all report `covered`. Missing declarations, legacy strings, duplicate IDs,
+  review statuses, wrong rules, unrelated paths, and unrelated commands fail
+  closed.
+- **Non-circular lane proof** is required. A script cannot use its own not-yet-
+  completed receipt as evidence. Map the implementation path to a lower-level
+  focused hostile/contract lane; the outer orchestrator may emit the higher-
+  level lane receipt only after that command actually returns successfully.
+- **Tool adoption** ratchets the candidate against the fixed protected
+  predecessor and runs Proofbind and Proofmark in required mode over the same
+  real compiler-covered Git fixture. Zero obligations, unavailable coverage,
+  review verdicts, or any missing required receipt make the lane fail.
 
 Run everything with `cargo nextest run --workspace` (lane `fast`/`test`).
+
+Public Rust API drift is executable evidence, not a prose declaration.
+`bash scripts/ci-local.sh contract-drift` requires `cargo-public-api 0.52.0`,
+uses the pinned nightly rustdoc required for rustdoc JSON with Cargo offline,
+regenerates all three crate surfaces, and compares exact SHA-256 digests with
+the reviewed `agent/public-api-baseline.json`.
+
+Changed-fast release evidence is split deliberately: the proof plan retains the
+exact Git change, while repository-wide readiness is evaluated on the full
+candidate tree. `ops/ci/changed-fast-evidence-test.sh` covers modified,
+untracked, renamed, deleted, and unchanged support documents plus a traversal
+hostile. `ops/ci/changed-fast-audit.sh` then rejects missing support, score below
+85, any cap, or any hard finding.
 
 ## Repair receipts and telemetry
 

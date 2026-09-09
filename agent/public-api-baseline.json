@@ -1,0 +1,12 @@
+{
+  "schema_version": "jankurai.public-api-baseline/v1",
+  "cargo_public_api_version": "cargo-public-api 0.52.0",
+  "rustdoc_toolchain": "nightly-2026-06-16-x86_64-unknown-linux-gnu",
+  "rustdoc_version": "rustdoc 1.98.0-nightly (01dfd7924 2026-06-15)",
+  "simplification": 3,
+  "packages": {
+    "jankurai-governed-launcher": "9f9f367256b8be2e93133901a97b8a7f890fe2936455d848cb49e9a6a37b37c9",
+    "jankurai-proofbind": "b8e2e6bcae24337fabac4a33be375f5d37f26cd98e64eb8422f254950c75e1a5",
+    "jankurai-proofmark": "76ef7a95fde83f168e6b03110c5fe2e80a642e23a0582ab1fa1832d1c904efe2"
+  }
+}

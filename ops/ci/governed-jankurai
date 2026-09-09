@@ -1,0 +1,8 @@
+#!/usr/bin/env bash
+set -euo pipefail
+
+ci_dir="${BASH_SOURCE[0]%/*}"
+[[ "$ci_dir" != "${BASH_SOURCE[0]}" ]] || ci_dir=.
+source "$ci_dir/lib.sh"
+cd "$REPO_ROOT"
+run_governed_jankurai "$@"

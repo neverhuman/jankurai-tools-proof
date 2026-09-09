@@ -8,21 +8,36 @@ use std::process::Command as GitProcess;
 use crate::shared::resolve_repo_path;
 
 #[derive(Debug, Clone, Default)]
+pub(crate) struct FileCoverage {
+    pub coverable: BTreeSet<u32>,
+    pub covered: BTreeSet<u32>,
+}
+
+#[derive(Debug, Clone, Default)]
 pub(crate) struct CoverageData {
     pub loaded: bool,
-    pub files: BTreeMap<String, BTreeSet<u32>>,
+    pub files: BTreeMap<String, FileCoverage>,
 }
 
 impl CoverageData {
-    pub(crate) fn covered_lines(&self, path: &str) -> BTreeSet<u32> {
-        let mut out = BTreeSet::new();
-        for (file, lines) in &self.files {
-            if file == path || file.ends_with(&format!("/{path}")) || path.ends_with(file) {
-                out.extend(lines.iter().copied());
+    pub(crate) fn file_coverage(&self, path: &str) -> Option<FileCoverage> {
+        let mut out = FileCoverage::default();
+        let mut matched = false;
+        for (file, coverage) in &self.files {
+            if coverage_path_matches(file, path) {
+                matched = true;
+                out.coverable.extend(coverage.coverable.iter().copied());
+                out.covered.extend(coverage.covered.iter().copied());
             }
         }
-        out
+        matched.then_some(out)
     }
+}
+
+fn coverage_path_matches(file: &str, path: &str) -> bool {
+    let file = file.trim_start_matches("./");
+    let path = path.trim_start_matches("./");
+    file == path || file.ends_with(&format!("/{path}")) || path.ends_with(&format!("/{file}"))
 }
 
 pub(crate) fn load_coverage(repo: &Path, path: Option<&Path>) -> Result<CoverageData> {
@@ -49,7 +64,9 @@ pub(crate) fn changed_lines_for_paths(
             continue;
         }
         let lines = match changed_lines_from_git(repo, changed_from, path) {
-            Ok(lines) if !lines.is_empty() => lines,
+            Ok(lines) if !lines.is_empty() => {
+                retain_potentially_executable_rust_lines(repo, path, lines)
+            }
             Ok(_) | Err(_) => BTreeSet::from([1]),
         };
         out.insert(path.clone(), lines);
@@ -65,7 +82,9 @@ fn load_lcov(text: &str) -> CoverageData {
     let mut current: Option<String> = None;
     for line in text.lines() {
         if let Some(file) = line.strip_prefix("SF:") {
-            current = Some(file.trim().replace('\\', "/"));
+            let file = file.trim().replace('\\', "/");
+            data.files.entry(file.clone()).or_default();
+            current = Some(file);
         } else if let Some(rest) = line.strip_prefix("DA:") {
             let Some(file) = current.clone() else {
                 continue;
@@ -74,8 +93,10 @@ fn load_lcov(text: &str) -> CoverageData {
             let line_no = parts.next().and_then(|value| value.parse::<u32>().ok());
             let hits = parts.next().and_then(|value| value.parse::<u64>().ok());
             if let (Some(line_no), Some(hits)) = (line_no, hits) {
+                let coverage = data.files.entry(file).or_default();
+                coverage.coverable.insert(line_no);
                 if hits > 0 {
-                    data.files.entry(file).or_default().insert(line_no);
+                    coverage.covered.insert(line_no);
                 }
             }
         }
@@ -101,12 +122,18 @@ fn load_json_coverage(text: &str) -> CoverageData {
             let Some(filename) = filename_value.and_then(Value::as_str) else {
                 continue;
             };
+            let coverage = data.files.entry(filename.replace('\\', "/")).or_default();
+            if let Some(lines) = file.get("coverable_lines").and_then(Value::as_array) {
+                coverage.coverable.extend(
+                    lines
+                        .iter()
+                        .filter_map(Value::as_u64)
+                        .map(|line| line as u32),
+                );
+            }
             if let Some(lines) = file.get("covered_lines").and_then(Value::as_array) {
                 for line in lines.iter().filter_map(Value::as_u64) {
-                    data.files
-                        .entry(filename.replace('\\', "/"))
-                        .or_default()
-                        .insert(line as u32);
+                    coverage.covered.insert(line as u32);
                 }
             }
         }
@@ -156,6 +183,58 @@ fn parse_unified_diff_changed_lines(diff: &str) -> BTreeSet<u32> {
         }
     }
     out
+}
+
+fn retain_potentially_executable_rust_lines(
+    repo: &Path,
+    path: &str,
+    lines: BTreeSet<u32>,
+) -> BTreeSet<u32> {
+    let Ok(source) = fs::read_to_string(repo.join(path)) else {
+        return lines;
+    };
+    let source_lines = source.lines().collect::<Vec<_>>();
+    lines
+        .into_iter()
+        .filter(|line| {
+            line.checked_sub(1)
+                .and_then(|index| source_lines.get(index as usize))
+                .is_none_or(|source| is_potentially_executable_rust_line(source))
+        })
+        .collect()
+}
+
+fn is_potentially_executable_rust_line(source: &str) -> bool {
+    let source = source.trim();
+    if source.is_empty()
+        || source.starts_with("//")
+        || source.starts_with("/*")
+        || source.starts_with('*')
+        || source.starts_with("#[")
+        || matches!(source, "{" | "}" | "};" | "],")
+    {
+        return false;
+    }
+    let declaration = [
+        "use ",
+        "pub use ",
+        "mod ",
+        "pub mod ",
+        "struct ",
+        "pub struct ",
+        "enum ",
+        "pub enum ",
+        "trait ",
+        "pub trait ",
+        "impl ",
+        "type ",
+        "pub type ",
+        "fn ",
+        "pub fn ",
+        "pub(crate) fn ",
+        "pub(super) fn ",
+    ];
+    !source.ends_with('{') || !declaration.iter().any(|prefix| source.starts_with(prefix))
 }
 
 fn parse_hunk_new_start(line: &str) -> Option<u32> {

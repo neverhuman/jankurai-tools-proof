@@ -1,20 +1,23 @@
 # jankurai-tools-proof
 
+<!-- jankurai-badge:start -->
+[![Jankurai score: 86/100](agent/jankurai-badge.svg)](agent/jankurai-badge.json)
+<!-- jankurai-badge:end -->
+
 [![CI](https://img.shields.io/badge/ci-pinned--lanes-green.svg)](.github/workflows/ci.yml)
 [![jankurai audit](https://img.shields.io/badge/jankurai--audit-pass-green.svg)](docs/testing.md)
 
 Rust source for the **Jankurai** proof tooling crates: `jankurai-proofbind`
-(semantic surface routing and proof obligation binding) and `jankurai-proofmark`
-(changed-behavior proof receipt engine). This repository is one member of the
-Jankurai split family; read [`SPLIT.md`](SPLIT.md) for the family contract and
-[`AGENTS.md`](AGENTS.md) for agent routing rules.
+(semantic surface routing and proof obligation binding), `jankurai-proofmark`
+(changed-behavior proof receipt engine), and `jankurai-governed-launcher`
+(content-authenticated execution of the installed auditor). This repository is
+one member of the Jankurai split family; read [`SPLIT.md`](SPLIT.md) for the
+family contract and [`AGENTS.md`](AGENTS.md) for agent routing rules.
 
 ## Stack
 
-Rust core + TypeScript/React/Vite product surface + PostgreSQL truth + generated
-contracts + exception-only Python AI/data service. This member ships only the
-Rust proof crates; new implementation is Rust-first. See
-[`docs/architecture.md`](docs/architecture.md).
+This member is a Rust-only workspace. It has no web, database, queue, or Python
+product surface. See [`docs/architecture.md`](docs/architecture.md).
 
 ## Quick start
 
@@ -39,6 +42,7 @@ integration runs the same lanes under
 | --- | --- |
 | `crates/jankurai-proofbind` | semantic surface routing + obligation binding |
 | `crates/jankurai-proofmark` | changed-behavior proof receipt engine |
+| `crates/jankurai-governed-launcher` | authenticated installed-auditor launcher |
 | `schemas/` | JSON Schemas for the proof artifacts |
 | `agent/` | machine-readable owner, test, boundary, and proof maps |
 | `docs/` | architecture, testing, boundaries, release, and exception docs |
@@ -53,10 +57,21 @@ integration runs the same lanes under
 - [Release process](docs/release.md)
 - [Agent exceptions and overrides](docs/exceptions.md)
 
+## Agent handoff
+
+Agents must read [`AGENTS.md`](AGENTS.md) and [`SPLIT.md`](SPLIT.md) before
+changing source. The required lane validates the repository-wide context and
+release controls declared in
+[`agent/supporting-evidence.json`](agent/supporting-evidence.json). Changed
+audits keep the exact Git path attribution in their proof plan while evaluating
+repository-wide release rules against the full candidate tree; see
+[`ops/ci/changed-fast-audit.sh`](ops/ci/changed-fast-audit.sh).
+
 ## Versioning
 
 The current version is recorded in [`VERSION`](VERSION) and the change history in
-[`CHANGELOG.md`](CHANGELOG.md). Release mechanics are documented in
+[`CHANGELOG.md`](CHANGELOG.md). The local Jeryu review, proof, immutable-tag,
+integrity, and rollback gates are documented in
 [`docs/release.md`](docs/release.md).
 
 ## License
