@@ -15,3 +15,10 @@ run_public_jankurai audit . --no-score-history --full \
 
 assert_artifact .jankurai/repo-score.json
 assert_artifact .jankurai/repo-score.md
+
+if [[ -f agent/badge.toml && -f agent/jankurai-badge.svg ]]; then
+  log "audit lane: first-party badge presence"
+  grep -q 'jankurai-badge:start' README.md
+  test -s agent/jankurai-badge.svg
+  test -s agent/jankurai-badge.json
+fi
