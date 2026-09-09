@@ -1,7 +1,7 @@
 # jankurai-tools-proof
 
 <!-- jankurai-badge:start -->
-[![Jankurai score: 86/100](agent/jankurai-badge.svg)](agent/jankurai-badge.json)
+[![Jankurai score: 91/100](agent/jankurai-badge.svg)](agent/jankurai-badge.json)
 <!-- jankurai-badge:end -->
 
 [![CI](https://img.shields.io/badge/ci-pinned--lanes-green.svg)](.github/workflows/ci.yml)

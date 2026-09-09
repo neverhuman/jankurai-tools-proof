@@ -19,8 +19,8 @@ if [[ -d packages/ux-qa ]]; then npm exec -- playwright install --with-deps chro
 source_root="$(mktemp -d "$repo_root/target/ci-auditor.XXXXXX")"
 trap 'rm -rf "$source_root"' EXIT
 git clone --no-checkout https://github.com/neverhuman/jankurai-core.git "$source_root/core"
-git -C "$source_root/core" checkout --detach af340cf595fc4c3e1d822adcddc5092eb5ea3400
-[[ "$(git -C "$source_root/core" rev-parse HEAD)" == af340cf595fc4c3e1d822adcddc5092eb5ea3400 ]]
+git -C "$source_root/core" checkout --detach 8505079e47597225e1f2bf65f57d41b0d050bfe7
+[[ "$(git -C "$source_root/core" rev-parse HEAD)" == 8505079e47597225e1f2bf65f57d41b0d050bfe7 ]]
 cargo install --path "$source_root/core/crates/jankurai" --locked --root "$repo_root/target/ci-tools"
 # Preserve the upstream language adversarial checks as part of independent CI.
 (cd "$source_root/core" && cargo test -p jankurai --test language_bad_behavior --locked) \
@@ -30,4 +30,4 @@ rustup toolchain install nightly-2026-06-16 --profile minimal
 cargo install cargo-public-api --version 0.52.0 --locked
 rustup component add llvm-tools-preview
 sha256sum target/ci-tools/bin/jankurai > target/ci-tools/auditor.sha256
-printf '%s\n' af340cf595fc4c3e1d822adcddc5092eb5ea3400 > target/ci-tools/auditor-source-revision
+printf '%s\n' 8505079e47597225e1f2bf65f57d41b0d050bfe7 > target/ci-tools/auditor-source-revision
