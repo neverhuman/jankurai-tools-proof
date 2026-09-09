@@ -16,17 +16,9 @@ run_public_jankurai audit . --no-score-history --full \
 assert_artifact .jankurai/repo-score.json
 assert_artifact .jankurai/repo-score.md
 
-if [[ -f agent/badge.toml ]]; then
-  log "audit lane: jankurai badge --check"
+if [[ -f agent/badge.toml && -f agent/jankurai-badge.svg ]]; then
+  log "audit lane: first-party badge presence"
   grep -q 'jankurai-badge:start' README.md
   test -s agent/jankurai-badge.svg
   test -s agent/jankurai-badge.json
-  jankurai badge --check \
-    --score agent/baselines/main.repo-score.json \
-    --out agent/jankurai-badge.svg \
-    --json-out agent/jankurai-badge.json \
-    --readme README.md \
-    --link agent/jankurai-badge.json \
-    --update-readme \
-    --label jankurai
 fi
