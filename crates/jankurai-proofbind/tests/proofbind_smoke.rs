@@ -766,6 +766,8 @@ fn documentation_and_inert_paths_are_not_agent_tool_surfaces() {
     let repo = seed_repo();
     fs::create_dir_all(repo.path().join("docs")).unwrap();
     fs::create_dir_all(repo.path().join("agent/baselines")).unwrap();
+    fs::create_dir_all(repo.path().join("schemas")).unwrap();
+    fs::create_dir_all(repo.path().join("agent/tools")).unwrap();
     fs::write(
         repo.path().join("README.md"),
         "# Fixture\n\nThis document mentions tool supply and mcp in prose only.\n",
@@ -782,8 +784,29 @@ fn documentation_and_inert_paths_are_not_agent_tool_surfaces() {
     )
     .unwrap();
     fs::write(
+        repo.path().join("schemas/proofbind-witness.schema.json"),
+        r#"{"$schema":"https://json-schema.org/draft/2020-12/schema","title":"witness"}"#,
+    )
+    .unwrap();
+    // Negative control: executable under docs/ must stay a tool/API surface.
+    fs::write(
+        repo.path().join("docs/tool.rs"),
+        "pub fn run_tool() {}\nfn main() { let _ = std::process::Command::new(\"true\"); }\n",
+    )
+    .unwrap();
+    fs::write(
+        repo.path().join("docs/mcp_handler.mjs"),
+        "export function mcpTool() { return 'ok'; }\n",
+    )
+    .unwrap();
+    fs::write(
+        repo.path().join("agent/tools/security-lane.sh"),
+        "#!/usr/bin/env bash\nset -euo pipefail\necho security-lane\n",
+    )
+    .unwrap();
+    fs::write(
         repo.path().join("agent/tool-contract.md"),
-        "# Agent tool contract\n\nExecutable agent tool surface.\n",
+        "# Agent tool contract\n\nMarkdown under agent/ is still prose, not an executable handler.\n",
     )
     .unwrap();
 
@@ -793,6 +816,10 @@ fn documentation_and_inert_paths_are_not_agent_tool_surfaces() {
             PathBuf::from("README.md"),
             PathBuf::from("docs/architecture.md"),
             PathBuf::from("agent/baselines/repo-score.json"),
+            PathBuf::from("schemas/proofbind-witness.schema.json"),
+            PathBuf::from("docs/tool.rs"),
+            PathBuf::from("docs/mcp_handler.mjs"),
+            PathBuf::from("agent/tools/security-lane.sh"),
             PathBuf::from("agent/tool-contract.md"),
         ],
         changed_from: None,
@@ -815,11 +842,24 @@ fn documentation_and_inert_paths_are_not_agent_tool_surfaces() {
             *path == "README.md"
                 || *path == "docs/architecture.md"
                 || *path == "agent/baselines/repo-score.json"
+                || *path == "schemas/proofbind-witness.schema.json"
+                || *path == "agent/tool-contract.md"
         }),
-        "docs/baselines must not become cli_command/mcp_tool: {tool_paths:?}"
+        "inert md/json must not become cli_command/mcp_tool: {tool_paths:?}"
     );
     assert!(
-        tool_paths.contains(&"agent/tool-contract.md"),
-        "real agent/ paths must remain tool surfaces: {tool_paths:?}"
+        tool_paths.contains(&"docs/mcp_handler.mjs"),
+        "docs/*.mjs executable must remain tool surfaces: {tool_paths:?}"
+    );
+    assert!(
+        tool_paths.contains(&"agent/tools/security-lane.sh"),
+        "agent/tools/*.sh must remain tool surfaces: {tool_paths:?}"
+    );
+    // docs/tool.rs must remain executable (rust_public_api), never inert-skipped.
+    assert!(
+        output.witness.surfaces.iter().any(|surface| {
+            surface.path == "docs/tool.rs" && surface.surface_type == "rust_public_api"
+        }),
+        "docs/tool.rs must remain an executable rust surface"
     );
 }
