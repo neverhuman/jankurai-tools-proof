@@ -564,9 +564,10 @@ rules_covered = ["HLT-024-AGENT-TOOL-SUPPLY-GAP"]
 "#,
     )
     .unwrap();
+    fs::create_dir_all(repo.path().join("agent/tools")).unwrap();
     fs::write(
-        repo.path().join("agent/tool.md"),
-        "the agent tool contract is executable\n",
+        repo.path().join("agent/tools/tool.sh"),
+        "#!/usr/bin/env bash\nset -euo pipefail\necho agent-tool\n",
     )
     .unwrap();
 
@@ -579,7 +580,7 @@ rules_covered = ["HLT-024-AGENT-TOOL-SUPPLY-GAP"]
         "exit_code": 0,
         "elapsed_ms": 1,
         "artifacts": [],
-        "changed_paths": ["agent/tool.md"],
+        "changed_paths": ["agent/tools/tool.sh"],
         "rules_covered": [{
             "rule_id": "HLT-024-AGENT-TOOL-SUPPLY-GAP",
             "status": "covered"
@@ -588,7 +589,7 @@ rules_covered = ["HLT-024-AGENT-TOOL-SUPPLY-GAP"]
     let verify = || {
         build_proofbind(ProofBindRequest {
             repo_root: repo.path().to_path_buf(),
-            changed_paths: vec![PathBuf::from("agent/tool.md")],
+            changed_paths: vec![PathBuf::from("agent/tools/tool.sh")],
             changed_from: None,
             mode: ProofBindMode::Required,
             proof_receipts: Some(PathBuf::from("target/jankurai/receipts")),
@@ -613,7 +614,7 @@ rules_covered = ["HLT-024-AGENT-TOOL-SUPPLY-GAP"]
                 "exit_code": 0,
                 "elapsed_ms": 1,
                 "artifacts": [],
-                "changed_paths": ["agent/tool.md"]
+                "changed_paths": ["agent/tools/tool.sh"]
             }),
         ),
         (
@@ -624,7 +625,7 @@ rules_covered = ["HLT-024-AGENT-TOOL-SUPPLY-GAP"]
                 "exit_code": 0,
                 "elapsed_ms": 1,
                 "artifacts": [],
-                "changed_paths": ["agent/tool.md"],
+                "changed_paths": ["agent/tools/tool.sh"],
                 "rules_covered": ["HLT-024-AGENT-TOOL-SUPPLY-GAP"]
             }),
         ),
@@ -636,7 +637,7 @@ rules_covered = ["HLT-024-AGENT-TOOL-SUPPLY-GAP"]
                 "exit_code": 0,
                 "elapsed_ms": 1,
                 "artifacts": [],
-                "changed_paths": ["agent/tool.md"],
+                "changed_paths": ["agent/tools/tool.sh"],
                 "rules_covered": [
                     {
                         "rule_id": "HLT-024-AGENT-TOOL-SUPPLY-GAP",
@@ -657,7 +658,7 @@ rules_covered = ["HLT-024-AGENT-TOOL-SUPPLY-GAP"]
                 "exit_code": 0,
                 "elapsed_ms": 1,
                 "artifacts": [],
-                "changed_paths": ["agent/tool.md"],
+                "changed_paths": ["agent/tools/tool.sh"],
                 "rules_covered": [{
                     "rule_id": "HLT-023-INPUT-BOUNDARY-GAP",
                     "status": "covered"
@@ -672,7 +673,7 @@ rules_covered = ["HLT-024-AGENT-TOOL-SUPPLY-GAP"]
                 "exit_code": 0,
                 "elapsed_ms": 1,
                 "artifacts": [],
-                "changed_paths": ["agent/tool.md"],
+                "changed_paths": ["agent/tools/tool.sh"],
                 "rules_covered": [
                     {
                         "rule_id": "HLT-024-AGENT-TOOL-SUPPLY-GAP",
@@ -708,7 +709,7 @@ rules_covered = ["HLT-024-AGENT-TOOL-SUPPLY-GAP"]
                 "exit_code": 0,
                 "elapsed_ms": 1,
                 "artifacts": [],
-                "changed_paths": ["agent/tool.md"],
+                "changed_paths": ["agent/tools/tool.sh"],
                 "rules_covered": [{
                     "rule_id": "HLT-024-AGENT-TOOL-SUPPLY-GAP",
                     "status": "covered"
