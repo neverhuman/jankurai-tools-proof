@@ -253,24 +253,29 @@ purpose = "example execution"
 #[test]
 fn non_rust_fallback_requires_the_declared_test_map_command() {
     let repo = seed_repo();
-    fs::create_dir_all(repo.path().join("docs")).unwrap();
-    fs::write(repo.path().join("docs/release.md"), "release evidence\n").unwrap();
+    // Non-inert, non-doc path: still gets catch-all business_invariant when unclassified.
+    fs::create_dir_all(repo.path().join("ops")).unwrap();
+    fs::write(
+        repo.path().join("ops/release-checklist.yaml"),
+        "steps: []\n",
+    )
+    .unwrap();
     fs::write(
         repo.path().join("agent/owner-map.json"),
-        r#"{"workspace":"fixture","owners":{"docs/":"docs"}}"#,
+        r#"{"workspace":"fixture","owners":{"ops/":"ops"}}"#,
     )
     .unwrap();
     fs::write(
         repo.path().join("agent/test-map.json"),
-        r#"{"workspace":"fixture","tests":{"docs/":{"command":"just docs-check","purpose":"docs"}}}"#,
+        r#"{"workspace":"fixture","tests":{"ops/":{"command":"just ops-check","purpose":"ops"}}}"#,
     )
     .unwrap();
     fs::write(
         repo.path().join("agent/proof-lanes.toml"),
         r#"[[lane]]
-name = "docs-check"
-command = "just docs-check"
-purpose = "documentation verification"
+name = "ops-check"
+command = "just ops-check"
+purpose = "ops verification"
 "#,
     )
     .unwrap();
@@ -278,14 +283,14 @@ purpose = "documentation verification"
     let receipt_dir = repo.path().join("target/jankurai/receipts");
     fs::create_dir_all(&receipt_dir).unwrap();
     fs::write(
-        receipt_dir.join("docs.json"),
+        receipt_dir.join("ops.json"),
         serde_json::json!({
-            "lane": "docs-check",
+            "lane": "ops-check",
             "command": "true",
             "exit_code": 0,
             "elapsed_ms": 1,
             "artifacts": [],
-            "changed_paths": ["docs/release.md"],
+            "changed_paths": ["ops/release-checklist.yaml"],
             "rules_covered": [{"rule_id":"HLT-008-FALSE-GREEN-RISK","status":"covered"}]
         })
         .to_string(),
@@ -294,7 +299,7 @@ purpose = "documentation verification"
 
     let false_green = build_proofbind(ProofBindRequest {
         repo_root: repo.path().to_path_buf(),
-        changed_paths: vec![PathBuf::from("docs/release.md")],
+        changed_paths: vec![PathBuf::from("ops/release-checklist.yaml")],
         changed_from: None,
         mode: ProofBindMode::Required,
         proof_receipts: Some(PathBuf::from("target/jankurai/receipts")),
@@ -302,19 +307,19 @@ purpose = "documentation verification"
     .unwrap();
     assert_eq!(
         false_green.obligations.obligations[0].required_lanes,
-        ["docs-check"]
+        ["ops-check"]
     );
     assert_eq!(false_green.obligations.summary.satisfied, 0);
 
     fs::write(
-        receipt_dir.join("docs.json"),
+        receipt_dir.join("ops.json"),
         serde_json::json!({
-            "lane": "docs-check",
-            "command": "just docs-check",
+            "lane": "ops-check",
+            "command": "just ops-check",
             "exit_code": 0,
             "elapsed_ms": 1,
             "artifacts": [],
-            "changed_paths": ["docs/release.md"],
+            "changed_paths": ["ops/release-checklist.yaml"],
             "rules_covered": [{"rule_id":"HLT-008-FALSE-GREEN-RISK","status":"covered"}]
         })
         .to_string(),
@@ -322,7 +327,7 @@ purpose = "documentation verification"
     .unwrap();
     let bound = build_proofbind(ProofBindRequest {
         repo_root: repo.path().to_path_buf(),
-        changed_paths: vec![PathBuf::from("docs/release.md")],
+        changed_paths: vec![PathBuf::from("ops/release-checklist.yaml")],
         changed_from: None,
         mode: ProofBindMode::Required,
         proof_receipts: Some(PathBuf::from("target/jankurai/receipts")),
@@ -862,5 +867,103 @@ fn documentation_and_inert_paths_are_not_agent_tool_surfaces() {
             surface.path == "docs/tool.rs" && surface.surface_type == "rust_public_api"
         }),
         "docs/tool.rs must remain an executable rust surface"
+    );
+}
+
+#[test]
+fn agent_control_toml_is_not_cli_command_or_hlt024() {
+    let repo = seed_repo();
+    // seed_repo already writes agent/proof-lanes.toml; treat it as the changed path.
+    let output = build_proofbind(ProofBindRequest {
+        repo_root: repo.path().to_path_buf(),
+        changed_paths: vec![PathBuf::from("agent/proof-lanes.toml")],
+        changed_from: None,
+        mode: ProofBindMode::Required,
+        proof_receipts: None,
+    })
+    .unwrap();
+
+    assert!(
+        output.witness.surfaces.is_empty(),
+        "agent control TOML must emit no surfaces, got {:?}",
+        output.witness.surfaces
+    );
+    assert!(
+        !output.obligations.obligations.iter().any(|obligation| {
+            obligation
+                .rule_ids
+                .iter()
+                .any(|rule| rule.contains("HLT-024"))
+                || obligation.surface_type == "cli_command"
+                || obligation.surface_type == "mcp_tool"
+                || matches!(obligation.severity.as_str(), "high" | "critical")
+        }),
+        "agent/proof-lanes.toml must not require HLT-024 or high/critical obligations: {:?}",
+        output.obligations.obligations
+    );
+    assert_eq!(output.obligations.summary.high_or_critical_missing, 0);
+}
+
+#[test]
+fn ops_ci_github_setup_is_not_business_invariant_hlt008() {
+    let repo = seed_repo();
+    fs::create_dir_all(repo.path().join("ops/ci")).unwrap();
+    fs::write(
+        repo.path().join("ops/ci/github-setup.sh"),
+        "#!/usr/bin/env bash\nset -euo pipefail\necho bootstrap\n",
+    )
+    .unwrap();
+    // Contrast: real CI proof script must still classify (not setup-only exempt).
+    fs::write(
+        repo.path().join("ops/ci/proof.sh"),
+        "#!/usr/bin/env bash\nset -euo pipefail\njankurai proofbind verify .\n",
+    )
+    .unwrap();
+
+    let setup = build_proofbind(ProofBindRequest {
+        repo_root: repo.path().to_path_buf(),
+        changed_paths: vec![PathBuf::from("ops/ci/github-setup.sh")],
+        changed_from: None,
+        mode: ProofBindMode::Required,
+        proof_receipts: None,
+    })
+    .unwrap();
+    assert!(
+        setup.witness.surfaces.is_empty(),
+        "github-setup.sh must emit no surfaces, got {:?}",
+        setup.witness.surfaces
+    );
+    assert!(
+        !setup.obligations.obligations.iter().any(|obligation| {
+            obligation.surface_type == "business_invariant"
+                || obligation
+                    .rule_ids
+                    .contains(&"HLT-008-FALSE-GREEN-RISK".to_string())
+        }),
+        "ops/ci/github-setup.sh must not get HLT-008 business_invariant: {:?}",
+        setup.obligations.obligations
+    );
+
+    let proof = build_proofbind(ProofBindRequest {
+        repo_root: repo.path().to_path_buf(),
+        changed_paths: vec![PathBuf::from("ops/ci/proof.sh")],
+        changed_from: None,
+        mode: ProofBindMode::Required,
+        proof_receipts: None,
+    })
+    .unwrap();
+    assert!(
+        !proof.witness.surfaces.is_empty(),
+        "ops/ci/proof.sh must still be classified"
+    );
+    assert!(
+        proof.obligations.obligations.iter().any(|obligation| {
+            obligation
+                .rule_ids
+                .contains(&"HLT-008-FALSE-GREEN-RISK".to_string())
+                || obligation.surface_type == "business_invariant"
+        }),
+        "ops/ci/proof.sh should still get a product/ops obligation: {:?}",
+        proof.obligations.obligations
     );
 }
