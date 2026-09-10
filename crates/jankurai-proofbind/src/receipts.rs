@@ -19,6 +19,7 @@ pub(crate) struct ReceiptEvidence {
     pub proofmark_results: BTreeMap<String, String>,
     pub proofmark_negative_results: BTreeMap<String, String>,
     pub typed_test_execution: Option<String>,
+    pub imported: bool,
 }
 
 pub(crate) fn load_receipts(repo: &Path, path: Option<&Path>) -> Result<Vec<ReceiptEvidence>> {
@@ -64,6 +65,10 @@ fn receipt_matches_surface(
     declared_test_command: Option<&str>,
 ) -> bool {
     if receipt.exit_code != 0 {
+        return false;
+    }
+    // Imported receipts cannot independently manufacture rule coverage.
+    if receipt.imported {
         return false;
     }
     if !surface
@@ -283,6 +288,20 @@ fn receipt_from_value(repo: &Path, entry: &Path, value: &Value) -> ReceiptEviden
         .and_then(Value::as_str)
         .filter(|kind| matches!(*kind, "test" | "example"))
         .map(str::to_string);
+    let imported = value
+        .get("extensions")
+        .and_then(|extensions| extensions.get("imported"))
+        .and_then(Value::as_bool)
+        .unwrap_or(false)
+        || value
+            .get("imported")
+            .and_then(Value::as_bool)
+            .unwrap_or(false)
+        || value
+            .get("extensions")
+            .and_then(|extensions| extensions.get("source"))
+            .and_then(Value::as_str)
+            .is_some_and(|source| source == "imported" || source == "foreign");
     ReceiptEvidence {
         lane,
         command,
@@ -295,6 +314,7 @@ fn receipt_from_value(repo: &Path, entry: &Path, value: &Value) -> ReceiptEviden
         proofmark_results,
         proofmark_negative_results,
         typed_test_execution,
+        imported,
     }
 }
 

@@ -3,7 +3,7 @@ use crate::shared::path_symbol;
 use crate::surface_rules::{
     contains_authz_marker, contains_destructive_sql, contains_input_marker, contains_process_sink,
     is_agent_tool_surface, is_documentation_or_inert_control_data, is_ops_ci_shell_script,
-    is_test_or_example_path, rust_public_symbols, surface_id,
+    is_test_or_example_path, rust_public_symbols, surface_id, toml_defines_executable_tool_policy,
 };
 use crate::{ChangedSurface, ProofObligation};
 use anyhow::{Context, Result};
@@ -28,8 +28,15 @@ pub(crate) fn classify_changed_path(
         return Ok(surfaces);
     }
 
+    // Non-executable TOML stays inert. Executable tool/MCP policy is classified
+    // by behavior below; do not blanket-exempt all `*.toml`.
+    if lower_path.ends_with(".toml") && !toml_defines_executable_tool_policy(&text) {
+        return Ok(surfaces);
+    }
+
     // CI scripts → CI hardening (HLT-020 / security). Do not use HLT-008 fallback.
     // Prefer not reclassifying tools/*.sh (those remain agent-tool / HLT-024).
+    // github-setup.sh is CI hardening, never business_invariant / HLT-008.
     if is_ops_ci_shell_script(&lower_path) {
         surfaces.push(surface(
             catalog,
@@ -128,6 +135,37 @@ pub(crate) fn classify_changed_path(
                 vec!["security", "proofmark-rust"],
             ));
         }
+    } else {
+        // Preserve input/authorization obligations for real non-Rust tools
+        // (tools/*.sh, docs/*.mjs, executable TOML). CI scripts already returned.
+        if contains_authz_marker(&lower_path, &lower_text) {
+            surfaces.push(surface(
+                catalog,
+                path,
+                "authz",
+                "authz_boundary",
+                "critical",
+                vec![
+                    "authorization",
+                    "tenant_isolation",
+                    "negative_proof_required",
+                ],
+                vec!["HLT-022-AUTHZ-ISOLATION-GAP"],
+                vec!["security"],
+            ));
+        }
+        if contains_input_marker(&lower_path, &lower_text) {
+            surfaces.push(surface(
+                catalog,
+                path,
+                "input",
+                "input_boundary",
+                "high",
+                vec!["input_validation", "negative_proof_required"],
+                vec!["HLT-023-INPUT-BOUNDARY-GAP"],
+                vec!["security"],
+            ));
+        }
     }
 
     if lower_path.ends_with(".sql") {
@@ -193,7 +231,7 @@ pub(crate) fn classify_changed_path(
                 "cli_command"
             },
             "high",
-            vec!["agent_tool_supply", "tool_authority"],
+            vec!["agent_tool_supply", "tool_authority", "changed_behavior"],
             vec!["HLT-024-AGENT-TOOL-SUPPLY-GAP"],
             vec![required_lane],
         ));

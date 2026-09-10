@@ -985,4 +985,238 @@ fn ops_ci_shell_scripts_require_hlt020_security_not_hlt008() {
         "tools/bar.sh must stay agent-tool HLT-024: {:?}",
         tools.witness.surfaces
     );
+    assert!(
+        tools.witness.surfaces.iter().any(|surface| {
+            surface.path == "tools/bar.sh"
+                && surface
+                    .risk_tags
+                    .iter()
+                    .any(|tag| tag == "changed_behavior")
+        }),
+        "real tools must keep changed_behavior: {:?}",
+        tools.witness.surfaces
+    );
+}
+
+#[test]
+fn executable_toml_tool_policy_is_classified_by_behavior() {
+    let repo = seed_repo();
+    fs::create_dir_all(repo.path().join("tools")).unwrap();
+    fs::create_dir_all(repo.path().join("agent")).unwrap();
+    fs::write(
+        repo.path().join("Cargo.toml"),
+        "[package]\nname = \"fixture\"\nversion = \"0.1.0\"\nedition = \"2021\"\n",
+    )
+    .unwrap();
+    fs::write(
+        repo.path().join("rust-toolchain.toml"),
+        "[toolchain]\nchannel = \"1.97.1\"\n",
+    )
+    .unwrap();
+    fs::write(
+        repo.path().join("agent/audit-policy.toml"),
+        "[audit]\nexclude = [\"target/\"]\n",
+    )
+    .unwrap();
+    fs::write(
+        repo.path().join("tools/mcp-policy.toml"),
+        "[mcp.servers.fs]\ncommand = \"npx\"\nargs = [\"-y\", \"@modelcontextprotocol/server-filesystem\"]\n",
+    )
+    .unwrap();
+    fs::write(
+        repo.path().join("tools/agent-tools.toml"),
+        "[[tool]]\nname = \"search\"\ncommand = \"tools/search.sh\"\n",
+    )
+    .unwrap();
+
+    let inert = build_proofbind(ProofBindRequest {
+        repo_root: repo.path().to_path_buf(),
+        changed_paths: vec![
+            PathBuf::from("Cargo.toml"),
+            PathBuf::from("rust-toolchain.toml"),
+            PathBuf::from("agent/audit-policy.toml"),
+            PathBuf::from("agent/proof-lanes.toml"),
+        ],
+        changed_from: None,
+        mode: ProofBindMode::Required,
+        proof_receipts: None,
+    })
+    .unwrap();
+    assert!(
+        inert.witness.surfaces.is_empty(),
+        "control/package TOML must stay inert, got {:?}",
+        inert.witness.surfaces
+    );
+
+    let executable = build_proofbind(ProofBindRequest {
+        repo_root: repo.path().to_path_buf(),
+        changed_paths: vec![
+            PathBuf::from("tools/mcp-policy.toml"),
+            PathBuf::from("tools/agent-tools.toml"),
+        ],
+        changed_from: None,
+        mode: ProofBindMode::Required,
+        proof_receipts: None,
+    })
+    .unwrap();
+    for path in ["tools/mcp-policy.toml", "tools/agent-tools.toml"] {
+        assert!(
+            executable.witness.surfaces.iter().any(|surface| {
+                surface.path == path
+                    && (surface.surface_type == "cli_command" || surface.surface_type == "mcp_tool")
+                    && surface
+                        .required_rules
+                        .contains(&"HLT-024-AGENT-TOOL-SUPPLY-GAP".to_string())
+            }),
+            "{path} executable TOML must be a tool surface: {:?}",
+            executable.witness.surfaces
+        );
+        assert!(
+            !executable.witness.surfaces.iter().any(|surface| {
+                surface.path == path
+                    && surface
+                        .required_rules
+                        .contains(&"HLT-008-FALSE-GREEN-RISK".to_string())
+                    && surface.surface_type == "business_invariant"
+            }),
+            "{path} must not fall back to HLT-008: {:?}",
+            executable.witness.surfaces
+        );
+    }
+}
+
+#[test]
+fn real_tools_preserve_input_and_authorization_obligations() {
+    let repo = seed_repo();
+    fs::create_dir_all(repo.path().join("tools")).unwrap();
+    fs::create_dir_all(repo.path().join("docs")).unwrap();
+    fs::write(
+        repo.path().join("tools/gate.sh"),
+        "#!/usr/bin/env bash\n# authorize tenant isolation\nparse() { :; }\nauthorize() { :; }\n",
+    )
+    .unwrap();
+    fs::write(
+        repo.path().join("docs/handler.mjs"),
+        "export function authorize(tenant_id) { return parse(tenant_id); }\n",
+    )
+    .unwrap();
+
+    let output = build_proofbind(ProofBindRequest {
+        repo_root: repo.path().to_path_buf(),
+        changed_paths: vec![
+            PathBuf::from("tools/gate.sh"),
+            PathBuf::from("docs/handler.mjs"),
+        ],
+        changed_from: None,
+        mode: ProofBindMode::Required,
+        proof_receipts: None,
+    })
+    .unwrap();
+
+    for path in ["tools/gate.sh", "docs/handler.mjs"] {
+        assert!(
+            output.witness.surfaces.iter().any(|surface| {
+                surface.path == path
+                    && (surface.surface_type == "cli_command" || surface.surface_type == "mcp_tool")
+                    && surface
+                        .required_rules
+                        .contains(&"HLT-024-AGENT-TOOL-SUPPLY-GAP".to_string())
+                    && surface
+                        .risk_tags
+                        .iter()
+                        .any(|tag| tag == "changed_behavior")
+            }),
+            "{path} must remain an agent tool with changed_behavior: {:?}",
+            output.witness.surfaces
+        );
+        assert!(
+            output.witness.surfaces.iter().any(|surface| {
+                surface.path == path
+                    && surface.surface_type == "authz_boundary"
+                    && surface
+                        .required_rules
+                        .contains(&"HLT-022-AUTHZ-ISOLATION-GAP".to_string())
+            }),
+            "{path} must keep authorization obligation: {:?}",
+            output.witness.surfaces
+        );
+        assert!(
+            output.witness.surfaces.iter().any(|surface| {
+                surface.path == path
+                    && surface.surface_type == "input_boundary"
+                    && surface
+                        .required_rules
+                        .contains(&"HLT-023-INPUT-BOUNDARY-GAP".to_string())
+            }),
+            "{path} must keep input obligation: {:?}",
+            output.witness.surfaces
+        );
+    }
+}
+
+#[test]
+fn imported_receipt_cannot_manufacture_coverage() {
+    let repo = seed_repo();
+    fs::create_dir_all(repo.path().join("examples")).unwrap();
+    fs::write(
+        repo.path().join("examples/demo.rs"),
+        "fn main() { println!(\"demo\"); }\n",
+    )
+    .unwrap();
+    fs::write(
+        repo.path().join("agent/owner-map.json"),
+        r#"{"workspace":"fixture","owners":{"examples/":"tools"}}"#,
+    )
+    .unwrap();
+    fs::write(
+        repo.path().join("agent/test-map.json"),
+        r#"{"workspace":"fixture","tests":{"examples/":{"command":"cargo run --example demo","purpose":"example"}}}"#,
+    )
+    .unwrap();
+    fs::write(
+        repo.path().join("agent/proof-lanes.toml"),
+        r#"[[lane]]
+name = "example-demo"
+command = "cargo run --example demo"
+purpose = "example execution"
+"#,
+    )
+    .unwrap();
+
+    let receipt_dir = repo.path().join("target/jankurai/receipts");
+    fs::create_dir_all(&receipt_dir).unwrap();
+    let imported = serde_json::json!({
+        "lane": "example-demo",
+        "command": "cargo run --example demo",
+        "exit_code": 0,
+        "elapsed_ms": 1,
+        "artifacts": [],
+        "changed_paths": ["examples/demo.rs"],
+        "rules_covered": [{"rule_id":"HLT-008-FALSE-GREEN-RISK","status":"covered"}],
+        "imported": true,
+        "extensions": {
+            "imported": true,
+            "source": "imported",
+            "test_execution": {
+                "kind": "example",
+                "status": "pass"
+            }
+        }
+    });
+    fs::write(receipt_dir.join("imported.json"), imported.to_string()).unwrap();
+
+    let output = build_proofbind(ProofBindRequest {
+        repo_root: repo.path().to_path_buf(),
+        changed_paths: vec![PathBuf::from("examples/demo.rs")],
+        changed_from: None,
+        mode: ProofBindMode::Required,
+        proof_receipts: Some(PathBuf::from("target/jankurai/receipts")),
+    })
+    .unwrap();
+    assert_eq!(
+        output.obligations.summary.satisfied, 0,
+        "imported receipt must not manufacture coverage: {:?}",
+        output.obligations.obligations
+    );
+    assert!(output.obligations.summary.missing > 0);
 }
