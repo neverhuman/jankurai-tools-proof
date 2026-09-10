@@ -121,9 +121,9 @@ pub fn is_test_or_example_path(path: &str) -> bool {
 
 pub(crate) fn is_agent_tool_surface(path: &str, text: &str) -> bool {
     let normalized = path.replace('\\', "/");
-    // Docs, badges, baselines, schemas, and maps are not executable tool supply.
-    // The previous bare `text.contains("tool")` needle classified README/docs/JSON as
-    // cli_command/mcp_tool and forced security/HLT-024 or proofmark-rust obligations.
+    // Classify by extension/format, not directory name: docs/tool.rs and
+    // schemas/handler.mjs remain executable tool surfaces; README.md / docs/*.md /
+    // inert JSON baselines / schema JSON must not become cli_command/mcp_tool.
     if is_documentation_or_inert_control_data(&normalized) {
         return false;
     }
@@ -138,28 +138,46 @@ pub(crate) fn is_agent_tool_surface(path: &str, text: &str) -> bool {
 }
 
 fn is_documentation_or_inert_control_data(path: &str) -> bool {
-    if path.starts_with("docs/")
-        || path == "readme.md"
-        || path.ends_with("/readme.md")
-        || path == "changelog.md"
-        || path.ends_with("/changelog.md")
-        || path == "agents.md"
-        || path == "claude.md"
-        || path == "gemini.md"
-        || path == "split.md"
-        || path == "license"
-        || path == "license.md"
+    let file_name = Path::new(path)
+        .file_name()
+        .and_then(|value| value.to_str())
+        .unwrap_or_default();
+    let lower_name = file_name.to_ascii_lowercase();
+
+    // Markdown / prose control docs (any directory, including docs/).
+    if lower_name.ends_with(".md")
+        || lower_name == "license"
+        || lower_name == "copying"
+        || lower_name == "notice"
     {
         return true;
     }
-    path.contains("/baselines/")
-        || path.contains("/schemas/")
-        || path.ends_with(".schema.json")
-        || path.ends_with("owner-map.json")
-        || path.ends_with("test-map.json")
-        || path.ends_with("repo-score.json")
-        || path.ends_with("repo-score.provenance.json")
-        || path.ends_with("jankurai-badge.json")
-        || path.ends_with("jankurai-badge.svg")
-        || path.ends_with(".svg")
+
+    // Badge / image artifacts.
+    if lower_name.ends_with(".svg")
+        || lower_name.ends_with(".png")
+        || lower_name.ends_with(".jpg")
+        || lower_name.ends_with(".jpeg")
+        || lower_name.ends_with(".gif")
+        || lower_name.ends_with(".webp")
+    {
+        return true;
+    }
+
+    // Inert JSON control/schema/baseline payloads — not .rs/.mjs/.sh executables
+    // that may live under docs/, schemas/, or baselines/ directories.
+    if lower_name.ends_with(".schema.json")
+        || lower_name.ends_with("owner-map.json")
+        || lower_name.ends_with("test-map.json")
+        || lower_name.ends_with("repo-score.json")
+        || lower_name.ends_with("repo-score.provenance.json")
+        || lower_name.ends_with("jankurai-badge.json")
+        || (path.contains("/baselines/") && lower_name.ends_with(".json"))
+        || (path.contains("/schemas/")
+            && (lower_name.ends_with(".json") || lower_name.ends_with(".jsonc")))
+    {
+        return true;
+    }
+
+    false
 }
