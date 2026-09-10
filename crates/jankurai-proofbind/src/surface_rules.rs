@@ -120,11 +120,46 @@ pub fn is_test_or_example_path(path: &str) -> bool {
 }
 
 pub(crate) fn is_agent_tool_surface(path: &str, text: &str) -> bool {
-    path.starts_with("agent/")
-        || path.starts_with(".agents/")
-        || path.starts_with(".cursor/")
-        || path.starts_with(".github/workflows/")
-        || path.contains("mcp")
+    let normalized = path.replace('\\', "/");
+    // Docs, badges, baselines, schemas, and maps are not executable tool supply.
+    // The previous bare `text.contains("tool")` needle classified README/docs/JSON as
+    // cli_command/mcp_tool and forced security/HLT-024 or proofmark-rust obligations.
+    if is_documentation_or_inert_control_data(&normalized) {
+        return false;
+    }
+    normalized.starts_with("agent/")
+        || normalized.starts_with(".agents/")
+        || normalized.starts_with(".cursor/")
+        || normalized.starts_with(".github/workflows/")
+        || normalized.starts_with("tools/")
+        || normalized.contains("/mcp/")
+        || normalized.contains("mcp")
         || text.contains("mcp")
-        || text.contains("tool")
+}
+
+fn is_documentation_or_inert_control_data(path: &str) -> bool {
+    if path.starts_with("docs/")
+        || path == "readme.md"
+        || path.ends_with("/readme.md")
+        || path == "changelog.md"
+        || path.ends_with("/changelog.md")
+        || path == "agents.md"
+        || path == "claude.md"
+        || path == "gemini.md"
+        || path == "split.md"
+        || path == "license"
+        || path == "license.md"
+    {
+        return true;
+    }
+    path.contains("/baselines/")
+        || path.contains("/schemas/")
+        || path.ends_with(".schema.json")
+        || path.ends_with("owner-map.json")
+        || path.ends_with("test-map.json")
+        || path.ends_with("repo-score.json")
+        || path.ends_with("repo-score.provenance.json")
+        || path.ends_with("jankurai-badge.json")
+        || path.ends_with("jankurai-badge.svg")
+        || path.ends_with(".svg")
 }

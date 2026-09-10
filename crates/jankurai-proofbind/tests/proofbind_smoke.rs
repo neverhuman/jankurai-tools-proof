@@ -760,3 +760,66 @@ rules_covered = [
         "duplicate reviewed rule declarations must fail closed"
     );
 }
+
+#[test]
+fn documentation_and_inert_paths_are_not_agent_tool_surfaces() {
+    let repo = seed_repo();
+    fs::create_dir_all(repo.path().join("docs")).unwrap();
+    fs::create_dir_all(repo.path().join("agent/baselines")).unwrap();
+    fs::write(
+        repo.path().join("README.md"),
+        "# Fixture\n\nThis document mentions tool supply and mcp in prose only.\n",
+    )
+    .unwrap();
+    fs::write(
+        repo.path().join("docs/architecture.md"),
+        "Operators run tools; mcp bridges are described here.\n",
+    )
+    .unwrap();
+    fs::write(
+        repo.path().join("agent/baselines/repo-score.json"),
+        r#"{"tool":"score","mcp":false}"#,
+    )
+    .unwrap();
+    fs::write(
+        repo.path().join("agent/tool-contract.md"),
+        "# Agent tool contract\n\nExecutable agent tool surface.\n",
+    )
+    .unwrap();
+
+    let output = build_proofbind(ProofBindRequest {
+        repo_root: repo.path().to_path_buf(),
+        changed_paths: vec![
+            PathBuf::from("README.md"),
+            PathBuf::from("docs/architecture.md"),
+            PathBuf::from("agent/baselines/repo-score.json"),
+            PathBuf::from("agent/tool-contract.md"),
+        ],
+        changed_from: None,
+        mode: ProofBindMode::Required,
+        proof_receipts: None,
+    })
+    .unwrap();
+
+    let tool_paths: Vec<_> = output
+        .witness
+        .surfaces
+        .iter()
+        .filter(|surface| {
+            surface.surface_type == "cli_command" || surface.surface_type == "mcp_tool"
+        })
+        .map(|surface| surface.path.as_str())
+        .collect();
+    assert!(
+        !tool_paths.iter().any(|path| {
+            *path == "README.md"
+                || *path == "docs/architecture.md"
+                || *path == "agent/baselines/repo-score.json"
+        }),
+        "docs/baselines must not become cli_command/mcp_tool: {tool_paths:?}"
+    );
+    assert!(
+        tool_paths.contains(&"agent/tool-contract.md"),
+        "real agent/ paths must remain tool surfaces: {tool_paths:?}"
+    );
+}
