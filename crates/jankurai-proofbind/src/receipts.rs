@@ -284,13 +284,9 @@ fn receipt_from_value(repo: &Path, entry: &Path, value: &Value) -> ReceiptEviden
         .and_then(Value::as_str)
         .filter(|kind| matches!(*kind, "test" | "example"))
         .map(str::to_string);
-    let extensions = value.get("extensions").unwrap_or(&Value::Null);
-    let imported = extensions.get("imported").and_then(Value::as_bool) == Some(true)
-        || value.get("imported").and_then(Value::as_bool) == Some(true)
-        || extensions
-            .get("source")
-            .and_then(Value::as_str)
-            .is_some_and(|source| source == "imported" || source == "foreign");
+    // Every file-loaded receipt is imported. JSON imported/source flags are
+    // attacker-controlled and must not manufacture a trusted observation.
+    let imported = true;
     ReceiptEvidence {
         lane,
         command,

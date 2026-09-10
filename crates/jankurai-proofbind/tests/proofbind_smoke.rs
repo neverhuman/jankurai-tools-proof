@@ -246,8 +246,11 @@ purpose = "example execution"
     })
     .unwrap();
 
-    assert_eq!(output.obligations.summary.satisfied, 1);
-    assert_eq!(output.obligations.summary.missing, 0);
+    assert_eq!(
+        output.obligations.summary.satisfied, 0,
+        "file-loaded example receipt cannot manufacture coverage"
+    );
+    assert!(output.obligations.summary.missing > 0);
 }
 
 #[test]
@@ -333,8 +336,11 @@ purpose = "ops verification"
         proof_receipts: Some(PathBuf::from("target/jankurai/receipts")),
     })
     .unwrap();
-    assert_eq!(bound.obligations.summary.satisfied, 1);
-    assert_eq!(bound.obligations.summary.missing, 0);
+    assert_eq!(
+        bound.obligations.summary.satisfied, 0,
+        "file-loaded ops receipt cannot manufacture coverage"
+    );
+    assert!(bound.obligations.summary.missing > 0);
 }
 
 #[test]
@@ -459,8 +465,11 @@ fn every_required_lane_and_receipt_kind_must_be_present() {
     })
     .unwrap();
 
-    assert_eq!(output.obligations.summary.satisfied, 1);
-    assert_eq!(output.obligations.summary.missing, 0);
+    assert_eq!(
+        output.obligations.summary.satisfied, 0,
+        "file-loaded receipts cannot manufacture coverage"
+    );
+    assert!(output.obligations.summary.missing > 0);
 }
 
 #[test]
@@ -608,7 +617,10 @@ rules_covered = ["HLT-024-AGENT-TOOL-SUPPLY-GAP"]
         valid.obligations.obligations[0].required_lanes,
         ["agent-contract"]
     );
-    assert_eq!(valid.obligations.summary.satisfied, 1);
+    assert_eq!(
+        valid.obligations.summary.satisfied, 0,
+        "file-loaded agent-tool receipt cannot manufacture coverage"
+    );
 
     let invalid_rule_claims = [
         (
@@ -884,8 +896,15 @@ fn agent_control_toml_is_not_cli_command_or_hlt024() {
     .unwrap();
 
     assert!(
-        output.witness.surfaces.is_empty(),
-        "agent control TOML must emit no surfaces, got {:?}",
+        output.witness.surfaces.iter().any(|surface| {
+            surface.path == "agent/proof-lanes.toml"
+                && (surface.surface_type == "business_invariant"
+                    || surface.surface_type == "pipeline_authority")
+                && surface
+                    .required_rules
+                    .contains(&"HLT-008-FALSE-GREEN-RISK".to_string())
+        }),
+        "proof-lanes command authority must keep HLT-008: {:?}",
         output.witness.surfaces
     );
     assert!(
@@ -938,31 +957,35 @@ fn ops_ci_shell_scripts_require_hlt020_security_not_hlt008() {
     .unwrap();
 
     for path in ["ops/ci/foo.sh", "ops/ci/github-setup.sh"] {
-        let surface = ops
+        let rules: Vec<_> = ops
             .witness
             .surfaces
             .iter()
-            .find(|surface| surface.path == path)
-            .unwrap_or_else(|| panic!("missing surface for {path}"));
-        assert_eq!(surface.surface_type, "ci_hardening");
+            .filter(|surface| surface.path == path)
+            .flat_map(|surface| surface.required_rules.iter().cloned())
+            .collect();
         assert!(
-            surface
-                .required_rules
-                .contains(&"HLT-020-CI-HARDENING-GAP".to_string()),
-            "{path} must require HLT-020: {:?}",
-            surface.required_rules
+            ops.witness.surfaces.iter().any(|surface| {
+                surface.path == path && surface.surface_type == "ci_hardening"
+            }),
+            "{path} must keep ci_hardening: {:?}",
+            ops.witness.surfaces
         );
         assert!(
-            surface.required_lanes.contains(&"security".to_string()),
+            rules.contains(&"HLT-020-CI-HARDENING-GAP".to_string()),
+            "{path} must require HLT-020: {rules:?}"
+        );
+        assert!(
+            rules.contains(&"HLT-008-FALSE-GREEN-RISK".to_string()),
+            "{path} must keep additive HLT-008: {rules:?}"
+        );
+        assert!(
+            ops.witness.surfaces.iter().any(|surface| {
+                surface.path == path
+                    && surface.required_lanes.contains(&"security".to_string())
+            }),
             "{path} must require security lane: {:?}",
-            surface.required_lanes
-        );
-        assert!(
-            !surface
-                .required_rules
-                .contains(&"HLT-008-FALSE-GREEN-RISK".to_string()),
-            "{path} must not fall back to HLT-008: {:?}",
-            surface.required_rules
+            ops.witness.surfaces
         );
     }
 
@@ -1005,7 +1028,17 @@ fn executable_toml_tool_policy_is_classified_by_behavior() {
     fs::create_dir_all(repo.path().join("agent")).unwrap();
     fs::write(
         repo.path().join("Cargo.toml"),
+        "[package]\nname = \"fixture\"\nversion = \"0.1.0\"\nedition = \"2021\"\n\n[dependencies]\nserde = \"1\"\n",
+    )
+    .unwrap();
+    fs::write(
+        repo.path().join("Cargo.name-only.toml"),
         "[package]\nname = \"fixture\"\nversion = \"0.1.0\"\nedition = \"2021\"\n",
+    )
+    .unwrap();
+    fs::write(
+        repo.path().join("comment-only.toml"),
+        "# [[lane]]\n# command = \"cargo test\"\n# [dependencies]\n# serde = \"1\"\n",
     )
     .unwrap();
     fs::write(
@@ -1015,7 +1048,7 @@ fn executable_toml_tool_policy_is_classified_by_behavior() {
     .unwrap();
     fs::write(
         repo.path().join("agent/audit-policy.toml"),
-        "[audit]\nexclude = [\"target/\"]\n",
+        "minimum_score = 80\nfail_on = []\n",
     )
     .unwrap();
     fs::write(
@@ -1029,7 +1062,7 @@ fn executable_toml_tool_policy_is_classified_by_behavior() {
     )
     .unwrap();
 
-    let inert = build_proofbind(ProofBindRequest {
+    let authority = build_proofbind(ProofBindRequest {
         repo_root: repo.path().to_path_buf(),
         changed_paths: vec![
             PathBuf::from("Cargo.toml"),
@@ -1042,9 +1075,43 @@ fn executable_toml_tool_policy_is_classified_by_behavior() {
         proof_receipts: None,
     })
     .unwrap();
+    for path in [
+        "Cargo.toml",
+        "rust-toolchain.toml",
+        "agent/audit-policy.toml",
+        "agent/proof-lanes.toml",
+    ] {
+        assert!(
+            authority.witness.surfaces.iter().any(|surface| {
+                surface.path == path
+                    && (surface.surface_type == "business_invariant"
+                        || surface.surface_type == "pipeline_authority")
+                    && surface
+                        .required_rules
+                        .contains(&"HLT-008-FALSE-GREEN-RISK".to_string())
+                    && !surface
+                        .required_rules
+                        .contains(&"HLT-024-AGENT-TOOL-SUPPLY-GAP".to_string())
+            }),
+            "{path} command/policy authority must emit HLT-008, not HLT-024: {:?}",
+            authority.witness.surfaces
+        );
+    }
+
+    let inert = build_proofbind(ProofBindRequest {
+        repo_root: repo.path().to_path_buf(),
+        changed_paths: vec![
+            PathBuf::from("Cargo.name-only.toml"),
+            PathBuf::from("comment-only.toml"),
+        ],
+        changed_from: None,
+        mode: ProofBindMode::Required,
+        proof_receipts: None,
+    })
+    .unwrap();
     assert!(
         inert.witness.surfaces.is_empty(),
-        "control/package TOML must stay inert, got {:?}",
+        "comment-only or name-only package TOML must stay inert, got {:?}",
         inert.witness.surfaces
     );
 
@@ -1185,38 +1252,78 @@ purpose = "example execution"
 
     let receipt_dir = repo.path().join("target/jankurai/receipts");
     fs::create_dir_all(&receipt_dir).unwrap();
-    let imported = serde_json::json!({
-        "lane": "example-demo",
-        "command": "cargo run --example demo",
-        "exit_code": 0,
-        "elapsed_ms": 1,
-        "artifacts": [],
-        "changed_paths": ["examples/demo.rs"],
-        "rules_covered": [{"rule_id":"HLT-008-FALSE-GREEN-RISK","status":"covered"}],
-        "imported": true,
-        "extensions": {
-            "imported": true,
-            "source": "imported",
-            "test_execution": {
-                "kind": "example",
-                "status": "pass"
-            }
-        }
+    let typed = serde_json::json!({
+        "kind": "example",
+        "status": "pass"
     });
-    fs::write(receipt_dir.join("imported.json"), imported.to_string()).unwrap();
-
-    let output = build_proofbind(ProofBindRequest {
-        repo_root: repo.path().to_path_buf(),
-        changed_paths: vec![PathBuf::from("examples/demo.rs")],
-        changed_from: None,
-        mode: ProofBindMode::Required,
-        proof_receipts: Some(PathBuf::from("target/jankurai/receipts")),
-    })
-    .unwrap();
-    assert_eq!(
-        output.obligations.summary.satisfied, 0,
-        "imported receipt must not manufacture coverage: {:?}",
-        output.obligations.obligations
-    );
-    assert!(output.obligations.summary.missing > 0);
+    let variants = [
+        (
+            "marked-imported",
+            serde_json::json!({
+                "lane": "example-demo",
+                "command": "cargo run --example demo",
+                "exit_code": 0,
+                "elapsed_ms": 1,
+                "artifacts": [],
+                "changed_paths": ["examples/demo.rs"],
+                "rules_covered": [{"rule_id":"HLT-008-FALSE-GREEN-RISK","status":"covered"}],
+                "imported": true,
+                "extensions": {
+                    "imported": true,
+                    "source": "imported",
+                    "test_execution": typed
+                }
+            }),
+        ),
+        (
+            "no-imported-markers",
+            serde_json::json!({
+                "lane": "example-demo",
+                "command": "cargo run --example demo",
+                "exit_code": 0,
+                "elapsed_ms": 1,
+                "artifacts": [],
+                "changed_paths": ["examples/demo.rs"],
+                "rules_covered": [{"rule_id":"HLT-008-FALSE-GREEN-RISK","status":"covered"}],
+                "extensions": {
+                    "test_execution": typed
+                }
+            }),
+        ),
+        (
+            "imported-false-source-local",
+            serde_json::json!({
+                "lane": "example-demo",
+                "command": "cargo run --example demo",
+                "exit_code": 0,
+                "elapsed_ms": 1,
+                "artifacts": [],
+                "changed_paths": ["examples/demo.rs"],
+                "rules_covered": [{"rule_id":"HLT-008-FALSE-GREEN-RISK","status":"covered"}],
+                "imported": false,
+                "extensions": {
+                    "imported": false,
+                    "source": "local",
+                    "test_execution": typed
+                }
+            }),
+        ),
+    ];
+    for (label, receipt) in variants {
+        fs::write(receipt_dir.join("imported.json"), receipt.to_string()).unwrap();
+        let output = build_proofbind(ProofBindRequest {
+            repo_root: repo.path().to_path_buf(),
+            changed_paths: vec![PathBuf::from("examples/demo.rs")],
+            changed_from: None,
+            mode: ProofBindMode::Required,
+            proof_receipts: Some(PathBuf::from("target/jankurai/receipts")),
+        })
+        .unwrap();
+        assert_eq!(
+            output.obligations.summary.satisfied, 0,
+            "{label} file-loaded receipt must not manufacture coverage: {:?}",
+            output.obligations.obligations
+        );
+        assert!(output.obligations.summary.missing > 0, "{label}");
+    }
 }

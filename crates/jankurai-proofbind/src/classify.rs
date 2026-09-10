@@ -27,8 +27,8 @@ pub(crate) fn classify_changed_path(
         return Ok(surfaces);
     }
 
-    // CI scripts → CI hardening (HLT-020 / security). Do not use HLT-008 fallback.
-    // Prefer not reclassifying tools/*.sh (those remain agent-tool / HLT-024).
+    // CI scripts → additive HLT-020 hardening plus HLT-008 changed-behavior.
+    // Continue so authz/input/process checks still run. tools/*.sh stay HLT-024.
     if is_ops_ci_shell_script(&lower_path) {
         surfaces.push(surface(
             catalog,
@@ -36,11 +36,10 @@ pub(crate) fn classify_changed_path(
             "ci",
             "ci_hardening",
             "high",
-            vec!["ci_hardening", "pipeline_authority"],
-            vec!["HLT-020-CI-HARDENING-GAP"],
+            vec!["ci_hardening", "pipeline_authority", "changed_behavior"],
+            vec!["HLT-020-CI-HARDENING-GAP", "HLT-008-FALSE-GREEN-RISK"],
             vec!["security"],
         ));
-        return Ok(surfaces);
     }
 
     if lower_path.ends_with(".rs") && is_test_or_example_path(&lower_path) {

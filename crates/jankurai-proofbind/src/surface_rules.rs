@@ -180,9 +180,6 @@ pub(crate) fn is_documentation_or_inert_control_data(path: &str) -> bool {
     if lower_name.ends_with(".schema.json")
         || lower_name.ends_with("owner-map.json")
         || lower_name.ends_with("test-map.json")
-        || lower_name.ends_with("proof-lanes.toml")
-        || lower_name == "cargo.toml"
-        || lower_name == "rust-toolchain.toml"
         || lower_name.ends_with("repo-score.json")
         || lower_name.ends_with("repo-score.provenance.json")
         || lower_name.ends_with("jankurai-badge.json")
@@ -197,8 +194,14 @@ pub(crate) fn is_documentation_or_inert_control_data(path: &str) -> bool {
 }
 
 pub(crate) fn is_inert_changed_path(path: &str, text: &str) -> bool {
-    is_documentation_or_inert_control_data(path)
-        || (path.ends_with(".toml") && !toml_defines_executable_tool_policy(text))
+    if is_documentation_or_inert_control_data(path) {
+        return true;
+    }
+    if path.ends_with(".toml") {
+        return !toml_defines_executable_tool_policy(text)
+            && !toml_changes_command_or_policy_authority(text);
+    }
+    false
 }
 
 /// Executable TOML/tool policy is classified by content, not by a blanket
@@ -233,8 +236,56 @@ pub(crate) fn toml_defines_executable_tool_policy(text: &str) -> bool {
         && (lower.contains("command") || lower.contains("argv") || lower.contains("args ="))
 }
 
-/// CI scripts under `ops/ci/*.sh` — hardening surfaces (HLT-020), not product
-/// business_invariant/HLT-008 and not agent-tool/HLT-024 (`tools/*.sh` stays tool).
+/// Command or policy authority in TOML: lane commands, crate/bin selection,
+/// toolchain channel, or audit-policy rules that disable checks. Comment-only
+/// and `[package]` name-only manifests are not authority.
+pub(crate) fn toml_changes_command_or_policy_authority(text: &str) -> bool {
+    let active = toml_active_lines(text);
+    if active.contains("[[lane]]") && active.contains("command") {
+        return true;
+    }
+    if toml_table_present(&active, "dependencies")
+        || toml_table_present(&active, "dev-dependencies")
+        || toml_table_present(&active, "build-dependencies")
+        || active.contains("[[bin]]")
+        || active.contains("[[example]]")
+    {
+        return true;
+    }
+    if active.contains("channel") && (active.contains("channel =") || active.contains("channel=")) {
+        return true;
+    }
+    audit_policy_disables_checks(&active)
+}
+
+fn toml_active_lines(text: &str) -> String {
+    text.lines()
+        .filter(|line| !line.trim_start().starts_with('#'))
+        .collect::<Vec<_>>()
+        .join("\n")
+        .to_ascii_lowercase()
+}
+
+fn toml_table_present(active: &str, name: &str) -> bool {
+    active.contains(&format!("[{name}]")) || active.contains(&format!(".{name}]"))
+}
+
+fn audit_policy_disables_checks(active: &str) -> bool {
+    active.contains("enabled = false")
+        || active.contains("enabled=false")
+        || active.contains("fail_on = []")
+        || active.contains("fail_on=[]")
+        || active.contains("deny = []")
+        || active.contains("deny=[]")
+        || active.contains("skip_check")
+        || active.contains("skip-check")
+        || active.contains("ignore_rules")
+        || (active.contains("disable")
+            && (active.contains("rule") || active.contains("check") || active.contains("audit")))
+}
+
+/// CI scripts under `ops/ci/*.sh` — additive HLT-020 hardening. HLT-008
+/// changed-behavior stays; `tools/*.sh` stays agent-tool / HLT-024.
 pub(crate) fn is_ops_ci_shell_script(path: &str) -> bool {
     let normalized = path.replace('\\', "/");
     normalized.starts_with("ops/ci/") && normalized.ends_with(".sh")
