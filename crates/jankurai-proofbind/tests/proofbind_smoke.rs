@@ -905,65 +905,84 @@ fn agent_control_toml_is_not_cli_command_or_hlt024() {
 }
 
 #[test]
-fn ops_ci_github_setup_is_not_business_invariant_hlt008() {
+fn ops_ci_shell_scripts_require_hlt020_security_not_hlt008() {
     let repo = seed_repo();
     fs::create_dir_all(repo.path().join("ops/ci")).unwrap();
+    fs::create_dir_all(repo.path().join("tools")).unwrap();
+    fs::write(
+        repo.path().join("ops/ci/foo.sh"),
+        "#!/usr/bin/env bash\nset -euo pipefail\necho ci-foo\n",
+    )
+    .unwrap();
     fs::write(
         repo.path().join("ops/ci/github-setup.sh"),
         "#!/usr/bin/env bash\nset -euo pipefail\necho bootstrap\n",
     )
     .unwrap();
-    // Contrast: real CI proof script must still classify (not setup-only exempt).
     fs::write(
-        repo.path().join("ops/ci/proof.sh"),
-        "#!/usr/bin/env bash\nset -euo pipefail\njankurai proofbind verify .\n",
+        repo.path().join("tools/bar.sh"),
+        "#!/usr/bin/env bash\nset -euo pipefail\necho agent-tool\n",
     )
     .unwrap();
 
-    let setup = build_proofbind(ProofBindRequest {
+    let ops = build_proofbind(ProofBindRequest {
         repo_root: repo.path().to_path_buf(),
-        changed_paths: vec![PathBuf::from("ops/ci/github-setup.sh")],
+        changed_paths: vec![
+            PathBuf::from("ops/ci/foo.sh"),
+            PathBuf::from("ops/ci/github-setup.sh"),
+        ],
         changed_from: None,
         mode: ProofBindMode::Required,
         proof_receipts: None,
     })
     .unwrap();
-    assert!(
-        setup.witness.surfaces.is_empty(),
-        "github-setup.sh must emit no surfaces, got {:?}",
-        setup.witness.surfaces
-    );
-    assert!(
-        !setup.obligations.obligations.iter().any(|obligation| {
-            obligation.surface_type == "business_invariant"
-                || obligation
-                    .rule_ids
-                    .contains(&"HLT-008-FALSE-GREEN-RISK".to_string())
-        }),
-        "ops/ci/github-setup.sh must not get HLT-008 business_invariant: {:?}",
-        setup.obligations.obligations
-    );
 
-    let proof = build_proofbind(ProofBindRequest {
+    for path in ["ops/ci/foo.sh", "ops/ci/github-setup.sh"] {
+        let surface = ops
+            .witness
+            .surfaces
+            .iter()
+            .find(|surface| surface.path == path)
+            .unwrap_or_else(|| panic!("missing surface for {path}"));
+        assert_eq!(surface.surface_type, "ci_hardening");
+        assert!(
+            surface
+                .required_rules
+                .contains(&"HLT-020-CI-HARDENING-GAP".to_string()),
+            "{path} must require HLT-020: {:?}",
+            surface.required_rules
+        );
+        assert!(
+            surface.required_lanes.contains(&"security".to_string()),
+            "{path} must require security lane: {:?}",
+            surface.required_lanes
+        );
+        assert!(
+            !surface
+                .required_rules
+                .contains(&"HLT-008-FALSE-GREEN-RISK".to_string()),
+            "{path} must not fall back to HLT-008: {:?}",
+            surface.required_rules
+        );
+    }
+
+    let tools = build_proofbind(ProofBindRequest {
         repo_root: repo.path().to_path_buf(),
-        changed_paths: vec![PathBuf::from("ops/ci/proof.sh")],
+        changed_paths: vec![PathBuf::from("tools/bar.sh")],
         changed_from: None,
         mode: ProofBindMode::Required,
         proof_receipts: None,
     })
     .unwrap();
     assert!(
-        !proof.witness.surfaces.is_empty(),
-        "ops/ci/proof.sh must still be classified"
-    );
-    assert!(
-        proof.obligations.obligations.iter().any(|obligation| {
-            obligation
-                .rule_ids
-                .contains(&"HLT-008-FALSE-GREEN-RISK".to_string())
-                || obligation.surface_type == "business_invariant"
+        tools.witness.surfaces.iter().any(|surface| {
+            surface.path == "tools/bar.sh"
+                && surface.surface_type == "cli_command"
+                && surface
+                    .required_rules
+                    .contains(&"HLT-024-AGENT-TOOL-SUPPLY-GAP".to_string())
         }),
-        "ops/ci/proof.sh should still get a product/ops obligation: {:?}",
-        proof.obligations.obligations
+        "tools/bar.sh must stay agent-tool HLT-024: {:?}",
+        tools.witness.surfaces
     );
 }
