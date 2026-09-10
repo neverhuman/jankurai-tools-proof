@@ -2,7 +2,7 @@ use crate::catalog::Catalog;
 use crate::shared::path_symbol;
 use crate::surface_rules::{
     contains_authz_marker, contains_destructive_sql, contains_input_marker, contains_process_sink,
-    is_agent_tool_surface, is_documentation_or_inert_control_data, is_ops_ci_setup_only_script,
+    is_agent_tool_surface, is_documentation_or_inert_control_data, is_ops_ci_shell_script,
     is_test_or_example_path, rust_public_symbols, surface_id,
 };
 use crate::{ChangedSurface, ProofObligation};
@@ -22,11 +22,25 @@ pub(crate) fn classify_changed_path(
     let lower_text = text.to_ascii_lowercase();
     let mut surfaces = Vec::new();
 
-    // Docs / inert control data / CI bootstrap setup must not become tool surfaces
-    // and must not fall through to catch-all business_invariant (HLT-008).
-    if is_documentation_or_inert_control_data(&lower_path)
-        || is_ops_ci_setup_only_script(&lower_path)
-    {
+    // Docs / inert control data must not become tool surfaces and must not fall
+    // through to catch-all business_invariant (HLT-008).
+    if is_documentation_or_inert_control_data(&lower_path) {
+        return Ok(surfaces);
+    }
+
+    // CI scripts → CI hardening (HLT-020 / security). Do not use HLT-008 fallback.
+    // Prefer not reclassifying tools/*.sh (those remain agent-tool / HLT-024).
+    if is_ops_ci_shell_script(&lower_path) {
+        surfaces.push(surface(
+            catalog,
+            path,
+            "ci",
+            "ci_hardening",
+            "high",
+            vec!["ci_hardening", "pipeline_authority"],
+            vec!["HLT-020-CI-HARDENING-GAP"],
+            vec!["security"],
+        ));
         return Ok(surfaces);
     }
 
@@ -273,6 +287,9 @@ fn repair_tasks(surface_type: &str, severity: &str) -> Vec<String> {
         "sql_query" => "prove the SQL boundary with migration or adapter evidence",
         "cli_command" | "mcp_tool" => {
             "prove the tool surface with supply-chain review and changed-behavior receipt"
+        }
+        "ci_hardening" => {
+            "prove CI script hardening with the security lane and attach a proof receipt"
         }
         "rust_public_api" => "prove public API compatibility and changed-line behavior",
         "unsafe_or_process_sink" => {
