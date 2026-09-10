@@ -196,6 +196,11 @@ pub(crate) fn is_documentation_or_inert_control_data(path: &str) -> bool {
     false
 }
 
+pub(crate) fn is_inert_changed_path(path: &str, text: &str) -> bool {
+    is_documentation_or_inert_control_data(path)
+        || (path.ends_with(".toml") && !toml_defines_executable_tool_policy(text))
+}
+
 /// Executable TOML/tool policy is classified by content, not by a blanket
 /// `*.toml` exemption. Lane catalogs (`[[lane]]`) and package/toolchain
 /// metadata are not tools; MCP/tool tables and command-bearing tool policy are.

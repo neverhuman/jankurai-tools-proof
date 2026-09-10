@@ -64,11 +64,7 @@ fn receipt_matches_surface(
     catalog: &crate::catalog::Catalog,
     declared_test_command: Option<&str>,
 ) -> bool {
-    if receipt.exit_code != 0 {
-        return false;
-    }
-    // Imported receipts cannot independently manufacture rule coverage.
-    if receipt.imported {
+    if receipt.exit_code != 0 || receipt.imported {
         return false;
     }
     if !surface
@@ -288,18 +284,11 @@ fn receipt_from_value(repo: &Path, entry: &Path, value: &Value) -> ReceiptEviden
         .and_then(Value::as_str)
         .filter(|kind| matches!(*kind, "test" | "example"))
         .map(str::to_string);
-    let imported = value
-        .get("extensions")
-        .and_then(|extensions| extensions.get("imported"))
-        .and_then(Value::as_bool)
-        .unwrap_or(false)
-        || value
-            .get("imported")
-            .and_then(Value::as_bool)
-            .unwrap_or(false)
-        || value
-            .get("extensions")
-            .and_then(|extensions| extensions.get("source"))
+    let extensions = value.get("extensions").unwrap_or(&Value::Null);
+    let imported = extensions.get("imported").and_then(Value::as_bool) == Some(true)
+        || value.get("imported").and_then(Value::as_bool) == Some(true)
+        || extensions
+            .get("source")
             .and_then(Value::as_str)
             .is_some_and(|source| source == "imported" || source == "foreign");
     ReceiptEvidence {
