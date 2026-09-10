@@ -127,11 +127,22 @@ pub(crate) fn is_agent_tool_surface(path: &str, text: &str) -> bool {
     if is_documentation_or_inert_control_data(&normalized) {
         return false;
     }
+    // TOML is classified by behavior: executable tool/MCP policy is a tool
+    // surface; lane catalogs, package manifests, and other control TOML are not.
+    if normalized.ends_with(".toml") {
+        return toml_defines_executable_tool_policy(text);
+    }
+    let docs_or_schema_executable = (normalized.starts_with("docs/")
+        || normalized.starts_with("schemas/"))
+        && (normalized.ends_with(".mjs")
+            || normalized.ends_with(".js")
+            || normalized.ends_with(".sh"));
     normalized.starts_with("agent/")
         || normalized.starts_with(".agents/")
         || normalized.starts_with(".cursor/")
         || normalized.starts_with(".github/workflows/")
         || normalized.starts_with("tools/")
+        || docs_or_schema_executable
         || normalized.contains("/mcp/")
         || normalized.contains("mcp")
         || text.contains("mcp")
@@ -170,6 +181,8 @@ pub(crate) fn is_documentation_or_inert_control_data(path: &str) -> bool {
         || lower_name.ends_with("owner-map.json")
         || lower_name.ends_with("test-map.json")
         || lower_name.ends_with("proof-lanes.toml")
+        || lower_name == "cargo.toml"
+        || lower_name == "rust-toolchain.toml"
         || lower_name.ends_with("repo-score.json")
         || lower_name.ends_with("repo-score.provenance.json")
         || lower_name.ends_with("jankurai-badge.json")
@@ -180,13 +193,44 @@ pub(crate) fn is_documentation_or_inert_control_data(path: &str) -> bool {
         return true;
     }
 
-    // TOML is never an executable tool surface. Covers agent control manifests
-    // (proof-lanes.toml, audit-policy.toml, badge.toml, …) and other config TOML.
-    if lower_name.ends_with(".toml") {
+    false
+}
+
+pub(crate) fn is_inert_changed_path(path: &str, text: &str) -> bool {
+    is_documentation_or_inert_control_data(path)
+        || (path.ends_with(".toml") && !toml_defines_executable_tool_policy(text))
+}
+
+/// Executable TOML/tool policy is classified by content, not by a blanket
+/// `*.toml` exemption. Lane catalogs (`[[lane]]`) and package/toolchain
+/// metadata are not tools; MCP/tool tables and command-bearing tool policy are.
+pub(crate) fn toml_defines_executable_tool_policy(text: &str) -> bool {
+    let lower = text.to_ascii_lowercase();
+    let lane_catalog_only = lower.contains("[[lane]]")
+        && !lower.contains("[[tool")
+        && !lower.contains("[mcp")
+        && !lower.contains("mcp_tool")
+        && !lower.contains("mcp-tool");
+    if lane_catalog_only {
+        return false;
+    }
+    if lower.contains("[[tool]]")
+        || lower.contains("[[tools]]")
+        || lower.contains("[tool.")
+        || lower.contains("[tools.")
+        || lower.contains("[[mcp")
+        || lower.contains("[mcp.")
+        || lower.contains("mcp_tool")
+        || lower.contains("mcp-tool")
+    {
         return true;
     }
-
-    false
+    let mentions_tool_policy = lower.contains("mcp")
+        || lower.contains("agent_tool")
+        || lower.contains("tool_command")
+        || lower.contains("tool-command");
+    mentions_tool_policy
+        && (lower.contains("command") || lower.contains("argv") || lower.contains("args ="))
 }
 
 /// CI scripts under `ops/ci/*.sh` — hardening surfaces (HLT-020), not product
@@ -195,4 +239,3 @@ pub(crate) fn is_ops_ci_shell_script(path: &str) -> bool {
     let normalized = path.replace('\\', "/");
     normalized.starts_with("ops/ci/") && normalized.ends_with(".sh")
 }
-

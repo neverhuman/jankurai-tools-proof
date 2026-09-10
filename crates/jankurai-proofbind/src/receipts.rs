@@ -19,6 +19,7 @@ pub(crate) struct ReceiptEvidence {
     pub proofmark_results: BTreeMap<String, String>,
     pub proofmark_negative_results: BTreeMap<String, String>,
     pub typed_test_execution: Option<String>,
+    pub imported: bool,
 }
 
 pub(crate) fn load_receipts(repo: &Path, path: Option<&Path>) -> Result<Vec<ReceiptEvidence>> {
@@ -63,7 +64,7 @@ fn receipt_matches_surface(
     catalog: &crate::catalog::Catalog,
     declared_test_command: Option<&str>,
 ) -> bool {
-    if receipt.exit_code != 0 {
+    if receipt.exit_code != 0 || receipt.imported {
         return false;
     }
     if !surface
@@ -283,6 +284,13 @@ fn receipt_from_value(repo: &Path, entry: &Path, value: &Value) -> ReceiptEviden
         .and_then(Value::as_str)
         .filter(|kind| matches!(*kind, "test" | "example"))
         .map(str::to_string);
+    let extensions = value.get("extensions").unwrap_or(&Value::Null);
+    let imported = extensions.get("imported").and_then(Value::as_bool) == Some(true)
+        || value.get("imported").and_then(Value::as_bool) == Some(true)
+        || extensions
+            .get("source")
+            .and_then(Value::as_str)
+            .is_some_and(|source| source == "imported" || source == "foreign");
     ReceiptEvidence {
         lane,
         command,
@@ -295,6 +303,7 @@ fn receipt_from_value(repo: &Path, entry: &Path, value: &Value) -> ReceiptEviden
         proofmark_results,
         proofmark_negative_results,
         typed_test_execution,
+        imported,
     }
 }
 
