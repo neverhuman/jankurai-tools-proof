@@ -2,7 +2,8 @@ use crate::catalog::Catalog;
 use crate::shared::path_symbol;
 use crate::surface_rules::{
     contains_authz_marker, contains_destructive_sql, contains_input_marker, contains_process_sink,
-    is_agent_tool_surface, is_test_or_example_path, rust_public_symbols, surface_id,
+    is_agent_tool_surface, is_documentation_or_inert_control_data, is_ops_ci_setup_only_script,
+    is_test_or_example_path, rust_public_symbols, surface_id,
 };
 use crate::{ChangedSurface, ProofObligation};
 use anyhow::{Context, Result};
@@ -20,6 +21,14 @@ pub(crate) fn classify_changed_path(
     let lower_path = path.to_ascii_lowercase();
     let lower_text = text.to_ascii_lowercase();
     let mut surfaces = Vec::new();
+
+    // Docs / inert control data / CI bootstrap setup must not become tool surfaces
+    // and must not fall through to catch-all business_invariant (HLT-008).
+    if is_documentation_or_inert_control_data(&lower_path)
+        || is_ops_ci_setup_only_script(&lower_path)
+    {
+        return Ok(surfaces);
+    }
 
     if lower_path.ends_with(".rs") && is_test_or_example_path(&lower_path) {
         let (_, proof_lane) = catalog.test_for_path(path);

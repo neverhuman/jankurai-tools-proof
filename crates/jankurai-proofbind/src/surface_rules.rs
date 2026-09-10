@@ -137,7 +137,7 @@ pub(crate) fn is_agent_tool_surface(path: &str, text: &str) -> bool {
         || text.contains("mcp")
 }
 
-fn is_documentation_or_inert_control_data(path: &str) -> bool {
+pub(crate) fn is_documentation_or_inert_control_data(path: &str) -> bool {
     let file_name = Path::new(path)
         .file_name()
         .and_then(|value| value.to_str())
@@ -179,5 +179,23 @@ fn is_documentation_or_inert_control_data(path: &str) -> bool {
         return true;
     }
 
+    // TOML is never an executable tool surface. Covers agent control manifests
+    // (proof-lanes.toml, audit-policy.toml, badge.toml, …) and other config TOML.
+    if lower_name.ends_with(".toml") {
+        return true;
+    }
+
     false
+}
+
+/// CI bootstrap/toolchain install only — not product proof/security scripts
+/// (`ops/ci/proof.sh`, `ops/ci/security.sh`, `tools/*.sh` stay classified).
+pub(crate) fn is_ops_ci_setup_only_script(path: &str) -> bool {
+    let normalized = path.replace('\\', "/");
+    let file_name = Path::new(&normalized)
+        .file_name()
+        .and_then(|value| value.to_str())
+        .unwrap_or_default();
+    file_name.eq_ignore_ascii_case("github-setup.sh")
+        && (normalized.starts_with("ops/ci/") || normalized == "github-setup.sh")
 }
