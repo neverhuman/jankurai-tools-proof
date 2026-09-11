@@ -42,9 +42,11 @@ export function validateParents(jobs) {
   }
 }
 
-export function validateExpandedJobs(payload, runId, head) {
-  if (!/^[1-9][0-9]*$/.test(runId) || !/^[a-f0-9]{40}$/.test(head)) {
-    throw new Error('missing valid workflow run/source identity');
+export function validateExpandedJobs(payload, runId, head, attempt) {
+  if (!/^[1-9][0-9]*$/.test(runId) || !Number.isSafeInteger(Number(runId))
+      || !/^[1-9][0-9]*$/.test(attempt ?? '') || !Number.isSafeInteger(Number(attempt))
+      || !/^[a-f0-9]{40}$/.test(head)) {
+    throw new Error('missing valid workflow run/attempt/source identity');
   }
   if (requiredJobs.length === 0 || !payload || !Array.isArray(payload.jobs) || !Number.isSafeInteger(payload.total_count) ||
       payload.total_count !== payload.jobs.length || payload.total_count === 0) {
@@ -53,7 +55,7 @@ export function validateExpandedJobs(payload, runId, head) {
   const names = new Set(), ids = new Set();
   for (const job of payload.jobs) {
     if (!job || typeof job !== 'object' || !Number.isSafeInteger(job.id) || job.id <= 0 ||
-        String(job.run_id) !== runId || job.head_sha !== head ||
+        String(job.run_id) !== runId || job.run_attempt !== Number(attempt) || job.head_sha !== head ||
         typeof job.name !== 'string' || ids.has(job.id) || names.has(job.name)) {
       throw new Error('duplicate, malformed, or foreign hosted job');
     }
@@ -78,18 +80,21 @@ function main(args) {
   }
   validateParents(parseUniqueJson(process.env.NEEDS_JSON ?? ''));
   if (args[0] === '--hosted') {
-    const { GITHUB_REPOSITORY: repo, GITHUB_RUN_ID: runId, EXPECTED_HEAD_SHA: head, GH_TOKEN: token } = process.env;
-    if (!repo || !/^[\w.-]+\/[\w.-]+$/.test(repo) || !/^[1-9][0-9]*$/.test(runId ?? '') ||
+    const { GITHUB_REPOSITORY: repo, GITHUB_RUN_ID: runId, GITHUB_RUN_ATTEMPT: attempt,
+      EXPECTED_HEAD_SHA: head, GH_TOKEN: token } = process.env;
+    if (repo !== 'neverhuman/jankurai-tools-proof' || !/^[1-9][0-9]*$/.test(runId ?? '') ||
+        !Number.isSafeInteger(Number(runId)) || !/^[1-9][0-9]*$/.test(attempt ?? '') ||
+        !Number.isSafeInteger(Number(attempt)) ||
         !/^[a-f0-9]{40}$/.test(head ?? '') || !token) {
       throw new Error('hosted aggregate requires the authenticated run/source identity');
     }
     // The expected inventory is smaller than one page. Reject truncation or
     // unexpected expansion, rather than trusting an incomplete page of jobs.
-    const result = spawnSync('gh', ['api', '--hostname', 'github.com', `repos/${repo}/actions/runs/${runId}/jobs?filter=latest&per_page=100`], {
+    const result = spawnSync('gh', ['api', '--hostname', 'github.com', `repos/${repo}/actions/runs/${runId}/attempts/${attempt}/jobs?per_page=100`], {
       encoding: 'utf8', timeout: 20000, maxBuffer: 4 * 1024 * 1024,
     });
     if (result.error || result.status !== 0) throw new Error('cannot read actual hosted job inventory');
-    validateExpandedJobs(parseUniqueJson(result.stdout), runId, head);
+    validateExpandedJobs(parseUniqueJson(result.stdout), runId, head, attempt);
   }
   console.log('complete required lane inventory passed');
 }

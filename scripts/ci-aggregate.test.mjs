@@ -1,5 +1,6 @@
 import assert from 'node:assert/strict';
 import fs from 'node:fs';
+import os from 'node:os';
 import { spawnSync } from 'node:child_process';
 import test from 'node:test';
 import { fileURLToPath } from 'node:url';
@@ -115,18 +116,18 @@ test('workflow mutations removing quality or always() are rejected', () => {
   }
 });
 
-const runId = '123', head = 'a'.repeat(40);
+const runId = '123', head = 'a'.repeat(40), attempt = '2';
 function hosted() {
-  const jobs = requiredJobs.map((name, i) => ({id:i + 1, name, run_id:123, head_sha:head, status:'completed', conclusion:'success'}));
+  const jobs = requiredJobs.map((name, i) => ({id:i + 1, name, run_id:123, run_attempt:2, head_sha:head, status:'completed', conclusion:'success'}));
   return { total_count:jobs.length, jobs };
 }
 
 test('expanded inventory permits every successful lane and conditional publication', () => {
-  validateExpandedJobs(hosted(), runId, head);
+  validateExpandedJobs(hosted(), runId, head, attempt);
   const payload = hosted();
-  payload.jobs.push({id:5, name:'publish-ci-tag', run_id:123, head_sha:head, status:'completed', conclusion:'skipped'});
+  payload.jobs.push({id:5, name:'publish-ci-tag', run_id:123, run_attempt:2, head_sha:head, status:'completed', conclusion:'skipped'});
   payload.total_count++;
-  validateExpandedJobs(payload, runId, head);
+  validateExpandedJobs(payload, runId, head, attempt);
   assert.deepEqual(parseUniqueJson('{"nested":[{"same":1},{"same":2}],"quoted":"\\\"{,}"}').nested, [{same:1},{same:2}]);
 });
 
@@ -138,19 +139,57 @@ for (const name of requiredJobs) for (const mutation of ['missing', 'renamed', '
     else if (mutation === 'in_progress') job.status = mutation;
     else job.conclusion = mutation;
     payload.total_count = payload.jobs.length;
-    assert.throws(() => validateExpandedJobs(payload, runId, head));
+    assert.throws(() => validateExpandedJobs(payload, runId, head, attempt));
   });
 }
 
-for (const mutation of ['duplicate-id', 'duplicate-name', 'wrong-head', 'wrong-run', 'truncated', 'empty']) {
+for (const mutation of ['duplicate-id', 'duplicate-name', 'wrong-head', 'wrong-run', 'wrong-attempt', 'missing-attempt', 'string-attempt', 'truncated', 'empty']) {
   test(`expanded inventory rejects ${mutation}`, () => {
     const payload = hosted();
     if (mutation === 'duplicate-id') { payload.jobs.push({...payload.jobs[0], name:'publish-ci-tag'}); payload.total_count++; }
     if (mutation === 'duplicate-name') { payload.jobs.push({...payload.jobs[0], id:2}); payload.total_count++; }
     if (mutation === 'wrong-head') payload.jobs[0].head_sha = 'b'.repeat(40);
     if (mutation === 'wrong-run') payload.jobs[0].run_id++;
+    if (mutation === 'wrong-attempt') payload.jobs[0].run_attempt--;
+    if (mutation === 'missing-attempt') delete payload.jobs[0].run_attempt;
+    if (mutation === 'string-attempt') payload.jobs[0].run_attempt = '2';
     if (mutation === 'truncated') payload.total_count++;
     if (mutation === 'empty') { payload.jobs = []; payload.total_count = 0; }
-    assert.throws(() => validateExpandedJobs(payload, runId, head));
+    assert.throws(() => validateExpandedJobs(payload, runId, head, attempt));
   });
 }
+
+test('expanded inventory requires an explicit safe run attempt', () => {
+  for (const invalid of [undefined, '', '0', '-1', '1.5', '9007199254740992']) {
+    assert.throws(() => validateExpandedJobs(hosted(), runId, head, invalid));
+  }
+  assert.throws(() => validateExpandedJobs(hosted(), '9007199254740992', head, attempt));
+});
+
+test('hosted command requests the current attempt and rejects incomplete admission', t => {
+  const directory = fs.mkdtempSync(path.join(os.tmpdir(), 'proof-aggregate-api-'));
+  t.after(() => fs.rmSync(directory, { recursive: true, force: true }));
+  const requested = path.join(directory, 'requested.json');
+  fs.writeFileSync(path.join(directory, 'gh'), `#!${process.execPath}\n` +
+    'require("fs").writeFileSync(process.env.REQUESTED_API, JSON.stringify(process.argv.slice(2)));\n' +
+    'process.stdout.write(process.env.FIXTURE_JOBS);\n', { mode: 0o700 });
+  const env = { ...process.env, PATH: `${directory}${path.delimiter}${process.env.PATH}`,
+    GITHUB_REPOSITORY: 'neverhuman/jankurai-tools-proof', GITHUB_RUN_ID: runId,
+    GITHUB_RUN_ATTEMPT: attempt, EXPECTED_HEAD_SHA: head, GH_TOKEN: 'fixture-only',
+    NEEDS_JSON: JSON.stringify(successfulJobs), REQUESTED_API: requested, FIXTURE_JOBS: JSON.stringify(hosted()) };
+  const execute = changes => spawnSync(process.execPath, [path.join(root, 'scripts/ci-aggregate.mjs'), '--hosted'], {
+    env: { ...env, ...changes }, encoding: 'utf8',
+  });
+  const passed = execute({}); assert.ifError(passed.error); assert.equal(passed.status, 0, passed.stderr);
+  assert.deepEqual(JSON.parse(fs.readFileSync(requested, 'utf8')),
+    ['api', '--hostname', 'github.com', 'repos/neverhuman/jankurai-tools-proof/actions/runs/123/attempts/2/jobs?per_page=100']);
+  fs.unlinkSync(requested);
+  for (const changes of [{ GITHUB_REPOSITORY: 'other/repository' }, { GITHUB_RUN_ID: '' },
+    { GITHUB_RUN_ATTEMPT: '' }, { GITHUB_RUN_ATTEMPT: '9007199254740992' },
+    { EXPECTED_HEAD_SHA: '' }, { GH_TOKEN: '' }]) {
+    const rejected = execute(changes); assert.ifError(rejected.error); assert.notEqual(rejected.status, 0);
+    assert.equal(fs.existsSync(requested), false, 'invalid admission must not query another run');
+  }
+  const stale = hosted(); stale.jobs[0].run_attempt = 1;
+  assert.notEqual(execute({ FIXTURE_JOBS: JSON.stringify(stale) }).status, 0);
+});
