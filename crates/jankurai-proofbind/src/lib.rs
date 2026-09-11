@@ -7,6 +7,7 @@ pub mod catalog;
 pub mod classify;
 mod configuration;
 mod input;
+mod obligations;
 pub mod receipts;
 pub mod shared;
 mod strict_json;
@@ -14,7 +15,8 @@ pub mod summary;
 pub mod surface_rules;
 
 use catalog::Catalog;
-use classify::{classify_changed_path, obligation_for_surface};
+use classify::classify_changed_path;
+use obligations::obligation_for_surface;
 use receipts::load_receipts;
 use shared::{git_output, resolve_changed_paths, unix_seconds};
 use summary::{obligation_summary, render_markdown, surface_summary};

@@ -200,7 +200,7 @@ pub(crate) fn satisfying_receipt_paths(
         .required_lanes
         .iter()
         .all(|lane| lanes.contains(lane.as_str()))
-        || !crate::classify::required_receipt_kinds(surface)
+        || !crate::obligations::required_receipt_kinds(surface)
             .iter()
             .all(|kind| kinds.contains(kind.as_str()))
     {
