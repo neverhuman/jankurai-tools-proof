@@ -613,10 +613,21 @@ rules_covered = ["HLT-024-AGENT-TOOL-SUPPLY-GAP"]
 
     fs::write(&receipt_path, valid_receipt.to_string()).unwrap();
     let valid = verify();
-    assert_eq!(
-        valid.obligations.obligations[0].required_lanes,
-        ["agent-contract"]
-    );
+    let tool = valid
+        .obligations
+        .obligations
+        .iter()
+        .find(|obligation| obligation.rule_ids == ["HLT-024-AGENT-TOOL-SUPPLY-GAP"])
+        .expect("agent tool obligation remains required");
+    assert_eq!(tool.required_lanes, ["agent-contract"]);
+    let process = valid
+        .obligations
+        .obligations
+        .iter()
+        .find(|obligation| obligation.surface_type == "unsafe_or_process_sink")
+        .expect("shell process boundary remains independently required");
+    assert_eq!(process.required_lanes, ["security"]);
+    assert!(!tool.satisfied && !process.satisfied);
     assert_eq!(
         valid.obligations.summary.satisfied, 0,
         "file-loaded agent-tool receipt cannot manufacture coverage"
@@ -924,7 +935,7 @@ fn agent_control_toml_is_not_cli_command_or_hlt024() {
 }
 
 #[test]
-fn ops_ci_shell_scripts_require_hlt020_security_not_hlt008() {
+fn ops_ci_shell_scripts_keep_hlt020_and_changed_behavior() {
     let repo = seed_repo();
     fs::create_dir_all(repo.path().join("ops/ci")).unwrap();
     fs::create_dir_all(repo.path().join("tools")).unwrap();
@@ -965,9 +976,10 @@ fn ops_ci_shell_scripts_require_hlt020_security_not_hlt008() {
             .flat_map(|surface| surface.required_rules.iter().cloned())
             .collect();
         assert!(
-            ops.witness.surfaces.iter().any(|surface| {
-                surface.path == path && surface.surface_type == "ci_hardening"
-            }),
+            ops.witness
+                .surfaces
+                .iter()
+                .any(|surface| { surface.path == path && surface.surface_type == "ci_hardening" }),
             "{path} must keep ci_hardening: {:?}",
             ops.witness.surfaces
         );
@@ -981,8 +993,7 @@ fn ops_ci_shell_scripts_require_hlt020_security_not_hlt008() {
         );
         assert!(
             ops.witness.surfaces.iter().any(|surface| {
-                surface.path == path
-                    && surface.required_lanes.contains(&"security".to_string())
+                surface.path == path && surface.required_lanes.contains(&"security".to_string())
             }),
             "{path} must require security lane: {:?}",
             ops.witness.surfaces

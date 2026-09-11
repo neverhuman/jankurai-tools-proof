@@ -12,6 +12,7 @@ concurrency:
   cancel-in-progress: true
 jobs:
   quality:
+    name: quality
     runs-on: ubuntu-24.04
     timeout-minutes: 90
     steps:
@@ -32,6 +33,7 @@ jobs:
           tool: cargo-llvm-cov@0.6.21,cargo-mutants@25.3.1,cargo-nextest@0.9.137,cargo-audit@0.22.1,cargo-deny@0.19.8,syft@1.40.0,zizmor@1.25.2
           fallback: none
       - run: bash ops/ci/github-setup.sh
+      - run: node --test scripts/ci-aggregate.test.mjs
       - run: bash ops/ci/github-check.sh
       - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
         if: always()
@@ -49,6 +51,9 @@ jobs:
     if: always()
     runs-on: ubuntu-24.04
     timeout-minutes: 5
+    permissions:
+      contents: read
+      actions: read
     steps:
       - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683
         with:
@@ -57,9 +62,11 @@ jobs:
         with:
           node-version: 24
           package-manager-cache: false
-      - run: bash ops/ci/aggregate.sh
+      - run: bash ops/ci/aggregate.sh --hosted
         env:
           NEEDS_JSON: ${{ toJSON(needs) }}
+          GH_TOKEN: ${{ github.token }}
+          EXPECTED_HEAD_SHA: ${{ github.event.pull_request.head.sha || github.sha }}
   publish-ci-tag:
     needs: required
     if: github.event_name == 'push' && github.ref == 'refs/heads/main'

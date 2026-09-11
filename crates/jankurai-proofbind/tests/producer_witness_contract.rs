@@ -41,13 +41,15 @@ fn classified_tests_have_a_published_witness_type_and_keep_missing_obligations()
         "../../../schemas/proofbind-witness.schema.json"
     ))
     .unwrap();
-    let published_types = schema["properties"]["surfaces"]["items"]["properties"]
-        ["surface_type"]["enum"]
+    let published_types = schema["properties"]["surfaces"]["items"]["properties"]["surface_type"]
+        ["enum"]
         .as_array()
         .unwrap();
     for surface in &output.witness.surfaces {
         assert_eq!(surface.surface_type, "test_execution");
-        assert!(published_types.iter().any(|value| value == &surface.surface_type));
+        assert!(published_types
+            .iter()
+            .any(|value| value == &surface.surface_type));
     }
     assert_eq!(output.obligations.summary.satisfied, 0);
     assert!(output.obligations.summary.missing > 0);

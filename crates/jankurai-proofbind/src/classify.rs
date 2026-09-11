@@ -1,13 +1,13 @@
 use crate::catalog::Catalog;
+use crate::configuration;
 use crate::shared::path_symbol;
 use crate::surface_rules::{
     contains_authz_marker, contains_destructive_sql, contains_input_marker, contains_process_sink,
     is_agent_tool_surface, is_inert_changed_path, is_ops_ci_shell_script, is_test_or_example_path,
     rust_public_symbols, surface_id,
 };
-use crate::{ChangedSurface, ProofObligation};
-use anyhow::{Context, Result};
-use std::fs;
+use crate::ChangedSurface;
+use anyhow::Result;
 use std::path::Path;
 
 pub(crate) fn classify_changed_path(
@@ -15,12 +15,14 @@ pub(crate) fn classify_changed_path(
     catalog: &Catalog,
     path: &str,
 ) -> Result<Vec<ChangedSurface>> {
-    let full_path = repo.join(path);
-    let text =
-        fs::read_to_string(&full_path).with_context(|| format!("read {}", full_path.display()))?;
+    let text = crate::input::read_text(repo, Path::new(path))?;
     let lower_path = path.to_ascii_lowercase();
     let lower_text = text.to_ascii_lowercase();
     let mut surfaces = Vec::new();
+
+    if let Some(surfaces) = configuration::surfaces(catalog, path, &text)? {
+        return Ok(surfaces);
+    }
 
     // Docs / inert control data must not become tool surfaces or HLT-008.
     if is_inert_changed_path(&lower_path, &text) {
@@ -38,6 +40,26 @@ pub(crate) fn classify_changed_path(
             "high",
             vec!["ci_hardening", "pipeline_authority", "changed_behavior"],
             vec!["HLT-020-CI-HARDENING-GAP", "HLT-008-FALSE-GREEN-RISK"],
+            vec!["security"],
+        ));
+    }
+
+    // A shell program can launch processes and consumes ambient input even if
+    // it has no Rust process marker. CI hardening never replaces this boundary.
+    if lower_path.ends_with(".sh")
+        && text.lines().any(|line| {
+            let line = line.trim();
+            !line.is_empty() && !line.starts_with('#')
+        })
+    {
+        surfaces.push(surface(
+            catalog,
+            path,
+            "process_sink",
+            "unsafe_or_process_sink",
+            "high",
+            vec!["process", "input_validation", "negative_proof_required"],
+            vec!["HLT-023-INPUT-BOUNDARY-GAP"],
             vec!["security"],
         ));
     }
@@ -221,7 +243,7 @@ pub(crate) fn classify_changed_path(
 }
 
 #[allow(clippy::too_many_arguments)]
-fn surface(
+pub(crate) fn surface(
     catalog: &Catalog,
     path: &str,
     symbol: &str,
@@ -246,102 +268,6 @@ fn surface(
         proof_lane,
         required_rules: required_rules.into_iter().map(str::to_string).collect(),
         required_lanes: required_lanes.into_iter().map(str::to_string).collect(),
-        repair_tasks: repair_tasks(surface_type, severity),
-    }
-}
-
-pub(crate) fn required_receipt_kinds(surface: &ChangedSurface) -> Vec<String> {
-    let mut kinds = vec!["proof-receipt".to_string()];
-    if surface.surface_type == "test_execution" {
-        kinds.push("test-execution".into());
-    }
-    if surface
-        .required_lanes
-        .iter()
-        .any(|lane| lane == "proofmark-rust")
-    {
-        kinds.push("proofmark".into());
-    }
-    if surface
-        .risk_tags
-        .iter()
-        .any(|tag| tag == "negative_proof_required")
-    {
-        kinds.push("negative-behavior-proof".into());
-    }
-    kinds
-}
-
-fn repair_tasks(surface_type: &str, severity: &str) -> Vec<String> {
-    let task = match surface_type {
-        "authz_boundary" => {
-            "add negative authorization or tenant-isolation proof and attach a proofmark receipt"
-        }
-        "input_boundary" => {
-            "add malformed-input or unsafe-sink negative proof and attach a proofmark receipt"
-        }
-        "db_migration" => {
-            "run migration analysis and document rollback/backfill/lock evidence for destructive SQL"
-        }
-        "sql_query" => "prove the SQL boundary with migration or adapter evidence",
-        "cli_command" | "mcp_tool" => {
-            "prove the tool surface with supply-chain review and changed-behavior receipt"
-        }
-        "ci_hardening" => {
-            "prove CI script hardening with the security lane and attach a proof receipt"
-        }
-        "rust_public_api" => "prove public API compatibility and changed-line behavior",
-        "unsafe_or_process_sink" => {
-            "prove the process/filesystem sink with negative input evidence"
-        }
-        _ => "attach a focused proof receipt for the changed behavior",
-    };
-    let mut tasks = vec![task.to_string()];
-    if matches!(severity, "high" | "critical") {
-        tasks.push("do not merge as hard proof until the obligation is satisfied or waived".into());
-    }
-    tasks
-}
-
-pub(crate) fn obligation_for_surface(
-    surface: &ChangedSurface,
-    receipts: &[crate::receipts::ReceiptEvidence],
-    catalog: &Catalog,
-) -> ProofObligation {
-    let obligation_id = format!(
-        "obligation:{}:{}",
-        match surface.required_rules.first() {
-            Some(rule) => rule.clone(),
-            None => "HLT-008-FALSE-GREEN-RISK".into(),
-        },
-        surface.surface_id
-    );
-    let mut receipt_paths = Vec::new();
-    receipt_paths.extend(crate::receipts::satisfying_receipt_paths(
-        &obligation_id,
-        surface,
-        receipts,
-        catalog,
-        catalog.test_command_for_path(&surface.path),
-    ));
-    let satisfied = !receipt_paths.is_empty();
-    ProofObligation {
-        obligation_id,
-        surface_id: surface.surface_id.clone(),
-        path: surface.path.clone(),
-        symbol: surface.symbol.clone(),
-        surface_type: surface.surface_type.clone(),
-        severity: surface.severity.clone(),
-        risk_tags: surface.risk_tags.clone(),
-        rule_ids: surface.required_rules.clone(),
-        required_lanes: surface.required_lanes.clone(),
-        required_receipt_kinds: required_receipt_kinds(surface),
-        repair_task: match surface.repair_tasks.first() {
-            Some(task) => task.clone(),
-            None => "attach a focused proof receipt for the changed surface".into(),
-        },
-        satisfied,
-        status: if satisfied { "satisfied" } else { "missing" }.into(),
-        receipt_paths,
+        repair_tasks: crate::obligations::repair_tasks(surface_type, severity),
     }
 }
