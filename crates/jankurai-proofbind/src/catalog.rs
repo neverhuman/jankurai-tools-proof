@@ -1,4 +1,6 @@
-use crate::shared::{normalize_prefix, prefix_matches, read_json, read_toml};
+use crate::input::read_optional_text;
+use crate::shared::{normalize_prefix, prefix_matches};
+use anyhow::{Context, Result};
 use serde::Deserialize;
 use std::collections::BTreeMap;
 use std::path::Path;
@@ -42,28 +44,31 @@ pub(crate) struct Catalog {
 }
 
 impl Catalog {
-    pub(crate) fn load(repo: &Path) -> Self {
-        let owner_map = match read_json(repo.join("agent/owner-map.json")) {
-            Some(value) => value,
-            None => OwnerMap {
-                owners: BTreeMap::new(),
-            },
-        };
-        let test_map = match read_json(repo.join("agent/test-map.json")) {
-            Some(value) => value,
-            None => TestMap {
-                tests: BTreeMap::new(),
-            },
-        };
-        let proof_lanes = match read_toml(repo.join("agent/proof-lanes.toml")) {
-            Some(value) => value,
-            None => ProofLanes { lane: Vec::new() },
-        };
-        Self {
+    pub(crate) fn load(repo: &Path) -> Result<Self> {
+        let owner_map = read_optional_text(repo, Path::new("agent/owner-map.json"))?
+            .map(|text| {
+                crate::strict_json::from_slice(text.as_bytes()).and_then(serde_json::from_value)
+            })
+            .transpose()
+            .context("incomplete analysis: parse owner map")?
+            .unwrap_or_default();
+        let test_map = read_optional_text(repo, Path::new("agent/test-map.json"))?
+            .map(|text| {
+                crate::strict_json::from_slice(text.as_bytes()).and_then(serde_json::from_value)
+            })
+            .transpose()
+            .context("incomplete analysis: parse test map")?
+            .unwrap_or_default();
+        let proof_lanes = read_optional_text(repo, Path::new("agent/proof-lanes.toml"))?
+            .map(|text| toml::from_str(&text))
+            .transpose()
+            .context("incomplete analysis: parse proof lane catalog")?
+            .unwrap_or_default();
+        Ok(Self {
             owner_map,
             test_map,
             proof_lanes,
-        }
+        })
     }
 
     pub(crate) fn owner_for_path(&self, path: &str) -> (String, String) {

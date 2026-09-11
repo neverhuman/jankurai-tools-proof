@@ -5,8 +5,11 @@ use std::path::PathBuf;
 
 pub mod catalog;
 pub mod classify;
+mod configuration;
+mod input;
 pub mod receipts;
 pub mod shared;
+mod strict_json;
 pub mod summary;
 pub mod surface_rules;
 
@@ -149,7 +152,7 @@ pub fn build_proofbind(request: ProofBindRequest) -> Result<ProofBindOutput> {
         request.changed_from.as_deref(),
         |_| true,
     )?;
-    let catalog = Catalog::load(&repo);
+    let catalog = Catalog::load(&repo)?;
     let mut surfaces = Vec::new();
     for path in &changed_paths {
         surfaces.extend(classify_changed_path(&repo, &catalog, path)?);

@@ -123,14 +123,9 @@ pub(crate) fn is_agent_tool_surface(path: &str, text: &str) -> bool {
     let normalized = path.replace('\\', "/");
     // Classify by extension/format, not directory name: docs/tool.rs and
     // schemas/handler.mjs remain executable tool surfaces; README.md / docs/*.md /
-    // inert JSON baselines / schema JSON must not become cli_command/mcp_tool.
+    // structured configuration is classified separately before this predicate.
     if is_documentation_or_inert_control_data(&normalized) {
         return false;
-    }
-    // TOML is classified by behavior: executable tool/MCP policy is a tool
-    // surface; lane catalogs, package manifests, and other control TOML are not.
-    if normalized.ends_with(".toml") {
-        return toml_defines_executable_tool_policy(text);
     }
     let docs_or_schema_executable = (normalized.starts_with("docs/")
         || normalized.starts_with("schemas/"))
@@ -175,113 +170,11 @@ pub(crate) fn is_documentation_or_inert_control_data(path: &str) -> bool {
         return true;
     }
 
-    // Inert JSON control/schema/baseline payloads — not .rs/.mjs/.sh executables
-    // that may live under docs/, schemas/, or baselines/ directories.
-    if lower_name.ends_with(".schema.json")
-        || lower_name.ends_with("owner-map.json")
-        || lower_name.ends_with("test-map.json")
-        || lower_name.ends_with("repo-score.json")
-        || lower_name.ends_with("repo-score.provenance.json")
-        || lower_name.ends_with("jankurai-badge.json")
-        || (path.contains("/baselines/") && lower_name.ends_with(".json"))
-        || (path.contains("/schemas/")
-            && (lower_name.ends_with(".json") || lower_name.ends_with(".jsonc")))
-    {
-        return true;
-    }
-
     false
 }
 
-pub(crate) fn is_inert_changed_path(path: &str, text: &str) -> bool {
-    if is_documentation_or_inert_control_data(path) {
-        return true;
-    }
-    if path.ends_with(".toml") {
-        return !toml_defines_executable_tool_policy(text)
-            && !toml_changes_command_or_policy_authority(text);
-    }
-    false
-}
-
-/// Executable TOML/tool policy is classified by content, not by a blanket
-/// `*.toml` exemption. Lane catalogs (`[[lane]]`) and package/toolchain
-/// metadata are not tools; MCP/tool tables and command-bearing tool policy are.
-pub(crate) fn toml_defines_executable_tool_policy(text: &str) -> bool {
-    let lower = text.to_ascii_lowercase();
-    let lane_catalog_only = lower.contains("[[lane]]")
-        && !lower.contains("[[tool")
-        && !lower.contains("[mcp")
-        && !lower.contains("mcp_tool")
-        && !lower.contains("mcp-tool");
-    if lane_catalog_only {
-        return false;
-    }
-    if lower.contains("[[tool]]")
-        || lower.contains("[[tools]]")
-        || lower.contains("[tool.")
-        || lower.contains("[tools.")
-        || lower.contains("[[mcp")
-        || lower.contains("[mcp.")
-        || lower.contains("mcp_tool")
-        || lower.contains("mcp-tool")
-    {
-        return true;
-    }
-    let mentions_tool_policy = lower.contains("mcp")
-        || lower.contains("agent_tool")
-        || lower.contains("tool_command")
-        || lower.contains("tool-command");
-    mentions_tool_policy
-        && (lower.contains("command") || lower.contains("argv") || lower.contains("args ="))
-}
-
-/// Command or policy authority in TOML: lane commands, crate/bin selection,
-/// toolchain channel, or audit-policy rules that disable checks. Comment-only
-/// and `[package]` name-only manifests are not authority.
-pub(crate) fn toml_changes_command_or_policy_authority(text: &str) -> bool {
-    let active = toml_active_lines(text);
-    if active.contains("[[lane]]") && active.contains("command") {
-        return true;
-    }
-    if toml_table_present(&active, "dependencies")
-        || toml_table_present(&active, "dev-dependencies")
-        || toml_table_present(&active, "build-dependencies")
-        || active.contains("[[bin]]")
-        || active.contains("[[example]]")
-    {
-        return true;
-    }
-    if active.contains("channel") && (active.contains("channel =") || active.contains("channel=")) {
-        return true;
-    }
-    audit_policy_disables_checks(&active)
-}
-
-fn toml_active_lines(text: &str) -> String {
-    text.lines()
-        .filter(|line| !line.trim_start().starts_with('#'))
-        .collect::<Vec<_>>()
-        .join("\n")
-        .to_ascii_lowercase()
-}
-
-fn toml_table_present(active: &str, name: &str) -> bool {
-    active.contains(&format!("[{name}]")) || active.contains(&format!(".{name}]"))
-}
-
-fn audit_policy_disables_checks(active: &str) -> bool {
-    active.contains("enabled = false")
-        || active.contains("enabled=false")
-        || active.contains("fail_on = []")
-        || active.contains("fail_on=[]")
-        || active.contains("deny = []")
-        || active.contains("deny=[]")
-        || active.contains("skip_check")
-        || active.contains("skip-check")
-        || active.contains("ignore_rules")
-        || (active.contains("disable")
-            && (active.contains("rule") || active.contains("check") || active.contains("audit")))
+pub(crate) fn is_inert_changed_path(path: &str, _text: &str) -> bool {
+    is_documentation_or_inert_control_data(path)
 }
 
 /// CI scripts under `ops/ci/*.sh` — additive HLT-020 hardening. HLT-008

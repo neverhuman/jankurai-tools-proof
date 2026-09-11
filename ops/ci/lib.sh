@@ -17,7 +17,7 @@ REPO_ROOT="$(cd "$ci_lib_dir/../.." && pwd -P)"
 export REPO_ROOT
 
 # Pinned tool versions. Lanes read these so CI and local environments match.
-export RUST_TOOLCHAIN="${RUST_TOOLCHAIN:-stable}"
+export RUST_TOOLCHAIN="${RUST_TOOLCHAIN:-1.97.1}"
 export GITLEAKS_VERSION="${GITLEAKS_VERSION:-8.18.4}"
 export CARGO_AUDIT_VERSION="${CARGO_AUDIT_VERSION:-0.21.0}"
 export NEXTEST_VERSION="${NEXTEST_VERSION:-0.9}"

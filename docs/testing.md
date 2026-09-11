@@ -17,8 +17,9 @@ machine-readable route lives in [`agent/test-map.json`](../agent/test-map.json).
 - **`jankurai-proofbind`** carries integration tests under
   `crates/jankurai-proofbind/tests/` plus a `proptest` property suite that
   exercises surface classification invariants. The authorization boundary path
-  is covered by a direct negative-proof test that asserts a non-owner request is
-  forbidden, satisfying `HLT-022-AUTHZ-ISOLATION-GAP`.
+  has negative tests that assert a non-owner request is forbidden. Trusted
+  `HLT-022-AUTHZ-ISOLATION-GAP` coverage additionally requires a qualified
+  producer to observe the relevant execution.
 - **`jankurai-proofmark`** carries integration tests under
   `crates/jankurai-proofmark/tests/` that prove obligations move from `review`
   to `pass` only when the matching coverage, mutation, and negative-behavior
@@ -26,16 +27,14 @@ machine-readable route lives in [`agent/test-map.json`](../agent/test-map.json).
   legacy hit-only JSON as an executable-universe claim, reject omitted added
   executable lines and empty LCOV intersections, reject absent production
   coverage, and keep test/example source out of the production LCOV denominator.
-- **Receipt completeness** tests prove that every required lane and receipt kind
-  must be present. Test and example sources accept only a successful typed
-  `extensions.test_execution` receipt with the right kind, lane, and exact
-  declared command. Non-Rust mapped surfaces likewise require the exact
-  declared command; self-asserted `true` receipts remain missing.
-- **Agent-tool rule binding** tests require a unique reviewed proof-lane
-  declaration and an exact-command receipt whose closed `rules_covered` objects
-  all report `covered`. Missing declarations, legacy strings, duplicate IDs,
-  review statuses, wrong rules, unrelated paths, and unrelated commands fail
-  closed.
+- **Receipt completeness** requires every lane and receipt kind. File-loaded
+  receipts are unverified imports: even a successful typed execution claim,
+  exact command, matching rule and repository declaration cannot grant trusted
+  execution coverage. Imported reports remain available for diagnosis.
+- **Agent-tool rule binding** tests retain command, rule and path checks as
+  necessary conditions. Neither repository declarations nor a file receipt
+  can authorize its own producer. Legacy strings, duplicate IDs, review
+  statuses, wrong rules, unrelated paths and unrelated commands remain invalid.
 - **Non-circular lane proof** is required. A script cannot use its own not-yet-
   completed receipt as evidence. Map the implementation path to a lower-level
   focused hostile/contract lane; the outer orchestrator may emit the higher-
@@ -46,6 +45,42 @@ machine-readable route lives in [`agent/test-map.json`](../agent/test-map.json).
   review verdicts, or any missing required receipt make the lane fail.
 
 Run everything with `cargo nextest run --workspace` (lane `fast`/`test`).
+
+## Configuration and incomplete inputs
+
+Proofbind parses TOML before classifying it. Cargo manifests/configuration,
+toolchains, lane catalogs and audit policy retain obligations when strengthened,
+weakened or emptied. Unknown configuration also retains changed-behavior proof.
+Comments and informational strings do not declare executable tools. Only the
+explicit informational TOML shape is inert outside known policy roles; JSON
+baselines, schemas and ownership maps remain policy inputs.
+
+Shell programs retain process/input and negative-behavior obligations alongside
+CI hardening. This routing is conservative: a safe implementation still needs
+proof that its boundary works. It does not establish a vulnerability from the
+presence of a shell command.
+
+Required changed inputs must be bounded regular UTF-8 files. Missing, malformed,
+oversized, symlinked or concurrently changed inputs fail analysis. Malformed
+present catalogs fail instead of becoming empty catalogs. Missing Git context
+also fails; local discovery includes staged, unstaged and untracked changes.
+These file checks do not replace the producer's confined source snapshot.
+
+Run the focused contracts with:
+
+```sh
+cargo test -p jankurai-proofbind --test configuration_authority --locked
+node --test scripts/ci-aggregate.test.mjs
+```
+
+The required aggregate accepts exactly `quality`, then verifies the actual job
+inventory for the current hosted run and head. Missing, renamed, duplicated,
+failed or skipped quality jobs fail. Publication is conditional. A future
+matrix requires an explicit expanded inventory and updated mutation checks.
+
+The existing tool-adoption lane uses its pinned older auditor. Its result does
+not qualify the new producer boundary. Final family adoption additionally needs
+the qualified supervised Core command and a real producer-positive execution.
 
 Public Rust API drift is executable evidence, not a prose declaration.
 `bash scripts/ci-local.sh contract-drift` requires `cargo-public-api 0.52.0`,

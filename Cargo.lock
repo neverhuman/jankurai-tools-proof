@@ -120,6 +120,7 @@ name = "jankurai-proofbind"
 version = "0.8.0"
 dependencies = [
  "anyhow",
+ "libc",
  "serde",
  "serde_json",
  "tempfile",

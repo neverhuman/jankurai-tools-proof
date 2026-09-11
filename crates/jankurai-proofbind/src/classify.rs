@@ -1,4 +1,5 @@
 use crate::catalog::Catalog;
+use crate::configuration;
 use crate::shared::path_symbol;
 use crate::surface_rules::{
     contains_authz_marker, contains_destructive_sql, contains_input_marker, contains_process_sink,
@@ -6,8 +7,7 @@ use crate::surface_rules::{
     rust_public_symbols, surface_id,
 };
 use crate::{ChangedSurface, ProofObligation};
-use anyhow::{Context, Result};
-use std::fs;
+use anyhow::Result;
 use std::path::Path;
 
 pub(crate) fn classify_changed_path(
@@ -15,12 +15,14 @@ pub(crate) fn classify_changed_path(
     catalog: &Catalog,
     path: &str,
 ) -> Result<Vec<ChangedSurface>> {
-    let full_path = repo.join(path);
-    let text =
-        fs::read_to_string(&full_path).with_context(|| format!("read {}", full_path.display()))?;
+    let text = crate::input::read_text(repo, Path::new(path))?;
     let lower_path = path.to_ascii_lowercase();
     let lower_text = text.to_ascii_lowercase();
     let mut surfaces = Vec::new();
+
+    if let Some(surfaces) = configuration::surfaces(catalog, path, &text)? {
+        return Ok(surfaces);
+    }
 
     // Docs / inert control data must not become tool surfaces or HLT-008.
     if is_inert_changed_path(&lower_path, &text) {
@@ -38,6 +40,26 @@ pub(crate) fn classify_changed_path(
             "high",
             vec!["ci_hardening", "pipeline_authority", "changed_behavior"],
             vec!["HLT-020-CI-HARDENING-GAP", "HLT-008-FALSE-GREEN-RISK"],
+            vec!["security"],
+        ));
+    }
+
+    // A shell program can launch processes and consumes ambient input even if
+    // it has no Rust process marker. CI hardening never replaces this boundary.
+    if lower_path.ends_with(".sh")
+        && text.lines().any(|line| {
+            let line = line.trim();
+            !line.is_empty() && !line.starts_with('#')
+        })
+    {
+        surfaces.push(surface(
+            catalog,
+            path,
+            "process_sink",
+            "unsafe_or_process_sink",
+            "high",
+            vec!["process", "input_validation", "negative_proof_required"],
+            vec!["HLT-023-INPUT-BOUNDARY-GAP"],
             vec!["security"],
         ));
     }
@@ -221,7 +243,7 @@ pub(crate) fn classify_changed_path(
 }
 
 #[allow(clippy::too_many_arguments)]
-fn surface(
+pub(crate) fn surface(
     catalog: &Catalog,
     path: &str,
     symbol: &str,

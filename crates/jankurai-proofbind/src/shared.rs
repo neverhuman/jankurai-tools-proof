@@ -1,7 +1,7 @@
-use anyhow::{Context, Result};
+use anyhow::{bail, Context, Result};
 use serde::de::DeserializeOwned;
 use std::fs;
-use std::path::{Path, PathBuf};
+use std::path::{Component, Path, PathBuf};
 use std::process::Command as GitProcess;
 use std::time::{SystemTime, UNIX_EPOCH};
 
@@ -29,12 +29,18 @@ where
     } else {
         changed
             .iter()
-            .filter_map(|path| normalize_changed_path(repo, path))
-            .collect()
+            .map(|path| {
+                normalize_changed_path(repo, path).with_context(|| {
+                    format!(
+                        "incomplete analysis: invalid changed path {}",
+                        path.display()
+                    )
+                })
+            })
+            .collect::<Result<Vec<_>>>()?
     };
     let mut paths = paths
         .into_iter()
-        .filter(|path| !path.trim().is_empty())
         .filter(|path| include_path(path))
         .collect::<Vec<_>>();
     paths.sort();
@@ -45,46 +51,80 @@ where
 pub fn changed_paths_from_git(repo: &Path, base: &str) -> Result<Vec<String>> {
     let refspec = format!("{base}...HEAD");
     let output = GitProcess::new("git")
-        .args(["diff", "--name-only", refspec.as_str()])
+        .args([
+            "-c",
+            "core.fsmonitor=false",
+            "diff",
+            "--no-ext-diff",
+            "--no-textconv",
+            "--name-only",
+            "-z",
+            refspec.as_str(),
+            "--",
+        ])
         .current_dir(repo)
         .output()
         .with_context(|| format!("run git diff for {base}"))?;
     if !output.status.success() {
-        return Ok(vec![]);
+        bail!("incomplete analysis: git diff failed for {base}");
     }
-    Ok(String::from_utf8_lossy(&output.stdout)
-        .lines()
-        .map(str::trim)
-        .filter(|line| !line.is_empty())
+    Ok(String::from_utf8(output.stdout)
+        .context("incomplete analysis: changed paths are not UTF-8")?
+        .split('\0')
+        .filter(|path| !path.is_empty())
         .map(str::to_string)
         .collect())
 }
 
 pub fn local_changed_paths_from_git(repo: &Path) -> Result<Vec<String>> {
     let output = GitProcess::new("git")
-        .args(["diff", "--name-only"])
+        .args([
+            "-c",
+            "core.fsmonitor=false",
+            "status",
+            "--porcelain=v1",
+            "-z",
+            "--untracked-files=all",
+        ])
         .current_dir(repo)
-        .output();
-    let Ok(output) = output else {
-        return Ok(vec![]);
-    };
+        .output()
+        .context("incomplete analysis: run git status")?;
     if !output.status.success() {
-        return Ok(vec![]);
+        bail!("incomplete analysis: git status failed");
     }
-    Ok(String::from_utf8_lossy(&output.stdout)
-        .lines()
-        .map(str::trim)
-        .filter(|line| !line.is_empty())
-        .map(str::to_string)
-        .collect())
+    let text = String::from_utf8(output.stdout)
+        .context("incomplete analysis: changed paths are not UTF-8")?;
+    let mut entries = text.split('\0').filter(|entry| !entry.is_empty());
+    let mut paths = Vec::new();
+    while let Some(entry) = entries.next() {
+        let bytes = entry.as_bytes();
+        if bytes.len() < 4 || bytes[2] != b' ' {
+            bail!("incomplete analysis: malformed Git status");
+        }
+        paths.push(entry[3..].to_string());
+        if bytes[..2]
+            .iter()
+            .any(|status| matches!(status, b'R' | b'C'))
+        {
+            entries
+                .next()
+                .context("incomplete analysis: missing rename source")?;
+        }
+    }
+    Ok(paths)
 }
 
 pub fn normalize_changed_path(repo: &Path, path: &Path) -> Option<String> {
     let candidate = resolve_repo_path(repo, path);
-    candidate
-        .strip_prefix(repo)
-        .ok()
-        .map(|path| path.to_string_lossy().replace('\\', "/"))
+    let relative = candidate.strip_prefix(repo).ok()?;
+    if relative.as_os_str().is_empty()
+        || relative
+            .components()
+            .any(|part| !matches!(part, Component::Normal(_)))
+    {
+        return None;
+    }
+    relative.to_str().map(str::to_string)
 }
 
 pub fn read_json<T: DeserializeOwned>(path: PathBuf) -> Option<T> {
@@ -120,13 +160,13 @@ pub fn git_output(repo: &Path, args: &[&str]) -> Option<String> {
 
 pub fn git_dirty(repo: &Path) -> bool {
     if let Ok(out) = GitProcess::new("git")
-        .args(["status", "--porcelain"])
+        .args(["-c", "core.fsmonitor=false", "status", "--porcelain"])
         .current_dir(repo)
         .output()
     {
-        !out.stdout.is_empty()
+        !out.status.success() || !out.stdout.is_empty()
     } else {
-        false
+        true
     }
 }
 
